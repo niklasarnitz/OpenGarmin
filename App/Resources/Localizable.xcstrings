@@ -221,6 +221,16 @@
         }
       }
     },
+    "Additional information" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weitere Informationen"
+          }
+        }
+      }
+    },
     "Allow" : {
       "localizations" : {
         "de" : {

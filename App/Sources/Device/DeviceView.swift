@@ -283,19 +283,24 @@ struct DeviceView: View {
             LabeledContent("Model", value: watch.info?.deviceModel ?? Formatting.deviceName(watch.catalogID))
             LabeledContent("Software", value: watch.info?.softwareVersionString ?? "–")
             LabeledContent("Protocol", value: watch.info.map { "\($0.protocolVersion)" } ?? "–")
-            Text("Features")
-                .font(.tileTitle)
-                .foregroundStyle(.secondary)
-                .padding(.top, 4)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), alignment: .leading)], alignment: .leading, spacing: 8) {
-                ForEach(watch.capabilities.sorted { $0.rawValue < $1.rawValue }, id: \.self) { capability in
-                    Text(Formatting.capability(capability))
-                        .font(.caption.weight(.medium))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Palette.glacier.opacity(0.15), in: .capsule)
+            // The capability list is long and rarely needed, so it starts collapsed.
+            DisclosureGroup("Additional information") {
+                Text("Features")
+                    .font(.tileTitle)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 4)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), alignment: .leading)], alignment: .leading, spacing: 8) {
+                    ForEach(watch.capabilities.sorted { $0.rawValue < $1.rawValue }, id: \.self) { capability in
+                        Text(Formatting.capability(capability))
+                            .font(.caption.weight(.medium))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Palette.glacier.opacity(0.15), in: .capsule)
+                    }
                 }
             }
+            .padding(.top, 4)
         }
     }
 }
