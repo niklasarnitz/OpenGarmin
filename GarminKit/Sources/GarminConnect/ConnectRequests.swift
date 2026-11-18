@@ -90,14 +90,16 @@ enum ConnectRequests {
 
     // MARK: - Connect API
 
-    /// One page of the activity list, newest first, between two calendar days.
-    static func activitiesQuery(start: Int, limit: Int, from: Date, to: Date, calendar: Calendar) -> [URLQueryItem] {
-        [
+    /// One page of the activity list, newest first, between two calendar days. Without days it pages through every
+    /// activity of the account.
+    static func activitiesQuery(start: Int, limit: Int, from: Date?, to: Date?, calendar: Calendar) -> [URLQueryItem] {
+        var query = [
             URLQueryItem(name: "start", value: String(start)),
             URLQueryItem(name: "limit", value: String(limit)),
-            URLQueryItem(name: "startDate", value: day(from, calendar: calendar)),
-            URLQueryItem(name: "endDate", value: day(to, calendar: calendar)),
         ]
+        if let from { query.append(URLQueryItem(name: "startDate", value: day(from, calendar: calendar))) }
+        if let to { query.append(URLQueryItem(name: "endDate", value: day(to, calendar: calendar))) }
+        return query
     }
 
     /// The original file of an activity: a zip archive that holds the FIT file.

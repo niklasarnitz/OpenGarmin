@@ -113,3 +113,15 @@ import GarminModels
         }
     }
 }
+
+@Test func activityListWithoutDaysPagesTheWholeAccount() {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "Europe/Berlin")!
+    let all = ConnectRequests.activitiesQuery(start: 200, limit: 100, from: nil, to: nil, calendar: calendar)
+    #expect(all == [URLQueryItem(name: "start", value: "200"), URLQueryItem(name: "limit", value: "100")])
+    // 2026-11-17 23:30 UTC is already the 18th in Berlin.
+    let ranged = ConnectRequests.activitiesQuery(start: 0, limit: 100, from: Date(timeIntervalSince1970: 1_794_958_200),
+                                                 to: Date(timeIntervalSince1970: 1_794_958_200), calendar: calendar)
+    #expect(ranged.map(\.name) == ["start", "limit", "startDate", "endDate"])
+    #expect(ranged[2].value == "2026-11-18")
+}

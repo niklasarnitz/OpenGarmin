@@ -81,8 +81,8 @@ public actor GarminConnectClient {
 
     // MARK: - Data
 
-    /// One page of the activity list between two calendar days, newest first.
-    public func activities(start: Int, limit: Int, from: Date, to: Date, calendar: Calendar = .current) async throws
+    /// One page of the activity list between two calendar days, newest first. nil days list every activity.
+    public func activities(start: Int, limit: Int, from: Date?, to: Date?, calendar: Calendar = .current) async throws
         -> [ConnectActivity] {
         let query = ConnectRequests.activitiesQuery(start: start, limit: limit, from: from, to: to, calendar: calendar)
         return try ConnectParsing.activities(await get(ConnectRequests.activitiesPath, query: query))

@@ -89,6 +89,7 @@ struct ConnectImportView: View {
                 Text("30 days").tag(30)
                 Text("90 days").tag(90)
                 Text("1 year").tag(365)
+                Text("All").tag(0)
             }
             .pickerStyle(.segmented)
             Button("Import", systemImage: "arrow.down.circle.fill") {
@@ -196,16 +197,18 @@ final class ConnectImportModel {
     }
 
     /// Activities first, newest first, then the stress and Body Battery of each day up to yesterday. Today is left out
-    /// because Body Battery is still changing; a day that was imported is skipped on the next run.
+    /// because Body Battery is still changing; a day that was imported is skipped on the next run. `days` 0 imports
+    /// every activity of the account, and the last year of stress and Body Battery, which is what the history keeps.
     private func runImport(days: Int) async throws -> String {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: .now)
-        let dates = (0..<days).reversed().compactMap { calendar.date(byAdding: .day, value: -$0, to: today) }
+        let dates = (0..<(days == 0 ? 365 : days)).reversed().compactMap { calendar.date(byAdding: .day, value: -$0, to: today) }
         guard let first = dates.first else { return "" }
         // Activities stored under the watch's unit number replace the watch's copy of the same activity in the history.
         let unit = watch.pairedWatch?.info?.unitNumber ?? 0
 
-        let activities = try await listActivities(from: first, to: today, calendar: calendar)
+        let activities = try await listActivities(from: days == 0 ? nil : first, to: days == 0 ? nil : today,
+                                                  calendar: calendar)
         var importedActivities = 0
         for (index, activity) in activities.enumerated() {
             progress = "Activity \(index + 1) of \(activities.count)"
@@ -230,7 +233,7 @@ final class ConnectImportModel {
     }
 
     /// Every activity between two calendar days, in pages of 100.
-    private func listActivities(from first: Date, to last: Date, calendar: Calendar) async throws -> [ConnectActivity] {
+    private func listActivities(from first: Date?, to last: Date?, calendar: Calendar) async throws -> [ConnectActivity] {
         var all: [ConnectActivity] = []
         var start = 0
         while true {
