@@ -35,6 +35,7 @@ let package = Package(
             dependencies: [
                 .target(name: "App"),
                 .product(name: "XCTVapor", package: "vapor"),
+                .product(name: "SotoS3", package: "soto"),
                 .product(name: "FluentSQL", package: "fluent-kit"),
                 .product(name: "GarminFIT", package: "GarminKit"),
                 .product(name: "GarminModels", package: "GarminKit"),

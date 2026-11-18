@@ -61,6 +61,21 @@ enum Store {
         }
 
         for activity in batch.activities {
+            // A Connect summary is not stored when a watch or FIT activity starts within a minute of it. A FIT activity
+            // replaces the Connect summary that starts within a minute of it, so each run is stored once.
+            if activity.id.hasPrefix("connect-") {
+                let fit = try await sql.raw("""
+                    SELECT count(*) AS count FROM activities
+                    WHERE user_id = \(bind: userID) AND external_id NOT LIKE 'connect-%'
+                        AND abs(extract(epoch FROM start_ts - \(bind: activity.start))) < 60
+                    """).first(decoding: CountRow.self)
+                if (fit?.count ?? 0) > 0 { continue }
+            } else {
+                try await sql.raw("""
+                    DELETE FROM activities WHERE user_id = \(bind: userID) AND external_id LIKE 'connect-%'
+                        AND abs(extract(epoch FROM start_ts - \(bind: activity.start))) < 60
+                    """).run()
+            }
             guard let row = try await sql.raw("""
                 INSERT INTO activities (user_id, external_id, fit_file_id, sport, sub_sport, name, start_ts, end_ts, duration, distance,
                     active_calories, avg_hr, max_hr, total_ascent, total_descent, avg_speed, avg_cadence, avg_power, training_effect)
@@ -100,6 +115,7 @@ enum Store {
         let touched = samples.map { $0.1.start } + batch.sleep.map(\.start) + batch.activities.map(\.start)
         try await Summaries.recompute(over: touched, userID: userID, sql: sql, calendar: calendar)
         try await Rollup.recompute(over: touched, userID: userID, sql: sql, calendar: calendar)
+        try await InsightStore.markDirty(sql, userID: userID)
     }
 }
 

@@ -10,6 +10,7 @@ enum Entrypoint {
             try await configure(app, config: ServerConfig.fromEnvironment(ProcessInfo.processInfo.environment))
             try await app.autoMigrate()
             Task { await ConnectArchive.reprocessOutdated(app) }
+            Task { await InsightJob.run(app) }
             try await app.execute()
         } catch {
             app.logger.report(error: error)

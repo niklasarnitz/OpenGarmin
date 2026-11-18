@@ -27,11 +27,16 @@ func registerAPIRoutes(_ app: Application) throws {
     api.patch("me") { req async throws -> UserDTO in
         let user = try await req.requireUser()
         let body = try await req.content.decode(MePatch.self)
-        guard let zone = body.timeZone else { return user.dto }
-        guard TimeZone(identifier: zone) != nil else {
-            throw Abort(.badRequest, reason: "`timeZone` must be an IANA time zone such as Europe/Berlin.")
+        if let zone = body.timeZone {
+            guard TimeZone(identifier: zone) != nil else {
+                throw Abort(.badRequest, reason: "`timeZone` must be an IANA time zone such as Europe/Berlin.")
+            }
+            try await Accounts.setTimeZone(zone, user: user, on: req)
         }
-        return try await Accounts.setTimeZone(zone, user: user, on: req)
+        if body.workDays != nil || body.workStart != nil || body.workEnd != nil {
+            try await Accounts.setWorkingHours(body, user: user, on: req)
+        }
+        return try await req.requireUser().dto
     }
 
     // Uploads
@@ -84,6 +89,11 @@ func registerAPIRoutes(_ app: Application) throws {
     api.get("connect", "diagnostics") { req async throws -> ConnectDiagnostics in
         let user = try await req.requireUser()
         return try await ConnectArchive.diagnostics(req, user: user)
+    }
+
+    api.get("insights") { req async throws -> [Insight] in
+        let user = try await req.requireUser()
+        return try await InsightStore.serve(req, user: user)
     }
 
     // Reads

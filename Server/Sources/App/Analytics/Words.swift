@@ -18,11 +18,12 @@ struct Words {
         "stress": ("stress", "Stress"),
         "bodyBattery": ("Body Battery", "Body Battery"),
         "intensityMinutes": ("intensity minutes", "Intensitätsminuten"),
+        "trainingMinutes": ("training minutes", "Trainingsminuten"),
     ]
 
     static let units: [String: String] = [
         "activeEnergy": "kcal", "sleepMinutes": "min", "sleepDeepMinutes": "min", "intensityMinutes": "min",
-        "restingHeartRate": "bpm", "hrv": "ms",
+        "restingHeartRate": "bpm", "hrv": "ms", "trainingMinutes": "min",
     ]
 
     static let months: (en: [String], de: [String]) = (
@@ -48,6 +49,12 @@ struct Words {
         let parts = CivilDay.parts(day)
         let month = de ? Words.months.de[parts.month - 1] : Words.months.en[parts.month - 1]
         return de ? "\(parts.day). \(month) \(parts.year)" : "\(parts.day) \(month) \(parts.year)"
+    }
+
+    /// `key` is year * 12 + month - 1, as the trend code counts months.
+    func monthYear(_ key: Int) -> String {
+        let month = de ? Words.months.de[key % 12] : Words.months.en[key % 12]
+        return "\(month) \(key / 12)"
     }
 
     func weekday(_ index: Int) -> String {

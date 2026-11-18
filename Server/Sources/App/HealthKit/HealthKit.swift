@@ -149,6 +149,7 @@ enum HealthKitImport {
                 """)
         }
         try await Rollup.recompute(over: rows.map(\.start), userID: userID, sql: sql, calendar: calendar)
+        try await InsightStore.markDirty(sql, userID: userID)
     }
 
     static func writeWorkouts(_ items: [WorkoutDTO], userID: UUID, sql: any SQLDatabase) async throws {

@@ -36,7 +36,7 @@ enum ConnectParser {
         var sleepCheck: SleepCheck?
     }
 
-    /// What one archived response contributes. `activityList` is archived but not parsed yet.
+    /// What one archived response contributes.
     static func parse(endpoint: String, day: String?, calendar: Calendar, body: Any) -> Parsed {
         var parsed = Parsed()
         switch endpoint {
@@ -66,6 +66,21 @@ enum ConnectParser {
             if let summary = json["hrvSummary"] as? [String: Any], let value = number(summary["lastNightAvg"]),
                let end = gmtDate(json["sleepEndTimestampGMT"] as? String) {
                 parsed.batch.hrv = [PointSample(date: end, value: value)]
+            }
+        case "activityList":
+            // The summary of each run. A FIT file of the same run replaces it in `Store.write`.
+            let rows = body as? [[String: Any]] ?? []
+            parsed.batch.activities = rows.compactMap { row -> Activity? in
+                guard let id = number(row["activityId"]), let start = gmtDate(row["startTimeGMT"] as? String),
+                      let duration = number(row["duration"]), duration > 0 else { return nil }
+                let type = (row["activityType"] as? [String: Any])?["typeKey"] as? String
+                return Activity(
+                    id: "connect-\(Int64(id))", sport: sport(type), name: row["activityName"] as? String,
+                    start: start, end: start.addingTimeInterval(duration), duration: duration,
+                    distance: number(row["distance"]), activeCalories: number(row["calories"]),
+                    averageHeartRate: number(row["averageHR"]).map { Int($0) },
+                    maxHeartRate: number(row["maxHR"]).map { Int($0) }
+                )
             }
         default:
             break
@@ -162,6 +177,21 @@ enum ConnectParser {
         rows(value).compactMap { row -> PointSample? in
             guard row.count >= 3, let ms = number(row[0]), let level = number(row[2]), (0.0...100.0).contains(level) else { return nil }
             return PointSample(date: Date(timeIntervalSince1970: ms / 1000), value: level)
+        }
+    }
+
+    /// Garmin Connect's activity type keys, for the sports the app shows. Anything else is generic.
+    static func sport(_ typeKey: String?) -> Sport {
+        switch typeKey {
+        case "running", "trail_running", "treadmill_running": .running
+        case "cycling", "road_biking", "mountain_biking", "indoor_cycling": .cycling
+        case "lap_swimming", "open_water_swimming": .swimming
+        case "walking": .walking
+        case "hiking": .hiking
+        case "rowing", "indoor_rowing": .rowing
+        case "strength_training": .training
+        case "indoor_cardio", "elliptical", "stair_climbing": .fitnessEquipment
+        default: .generic
         }
     }
 

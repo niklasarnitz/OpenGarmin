@@ -332,6 +332,66 @@ final class ServerTests: XCTestCase {
         }
     }
 
+    /// A Connect activity summary and the FIT file of the same run are stored once, in either order.
+    func testConnectActivitySummaryAndFITFileOfOneRunAreStoredOnce() async throws {
+        try await withHarness { h in
+            let token = try await register(h, "activities@example.com")
+            func listed(_ key: String) async throws -> Reply {
+                try await send(h, .POST, "/api/v1/connect/raw", headers: headers(bearer: token), body: try json([
+                    "key": key, "endpoint": "activityList", "fetchedAt": "2026-01-12T07:00:00Z",
+                    "body": [[
+                        "activityId": 987654, "startTimeGMT": "2026-01-11 08:00:30", "duration": 1800,
+                        "activityType": ["typeKey": "running"], "distance": 5000,
+                    ]],
+                ]))
+            }
+            let summary = try await listed("connect-list-1")
+            XCTAssertEqual(summary.status, .ok)
+            let summaries = try await scalar(h, "SELECT count(*) AS count FROM activities WHERE external_id = 'connect-987654'")
+            XCTAssertEqual(summaries, 1)
+
+            // The FIT file of the same run starts 30 seconds earlier and replaces the summary.
+            let fit = try await uploadFIT(h, token: token, bytes: activityFIT(), key: "watch-run-1", source: "watch")
+            XCTAssertEqual(fit.status, .ok)
+            let afterFIT = try await scalar(h, "SELECT count(*) AS count FROM activities")
+            XCTAssertEqual(afterFIT, 1)
+            let leftover = try await scalar(h, "SELECT count(*) AS count FROM activities WHERE external_id LIKE 'connect-%'")
+            XCTAssertEqual(leftover, 0)
+
+            // The summary listed again is already covered by the FIT activity and adds nothing.
+            _ = try await listed("connect-list-2")
+            let afterAgain = try await scalar(h, "SELECT count(*) AS count FROM activities")
+            XCTAssertEqual(afterAgain, 1)
+        }
+    }
+
+    func testInsightsEndpointAndWorkingHoursAreValidated() async throws {
+        try await withHarness { h in
+            let token = try await register(h, "insights@example.com")
+            let badDays = try await send(h, .PATCH, "/api/v1/me", headers: headers(bearer: token),
+                                         body: try json(["workDays": [0, 1]]))
+            XCTAssertEqual(badDays.status, .badRequest, "weekdays are 1 (Monday) to 7 (Sunday)")
+            let badHours = try await send(h, .PATCH, "/api/v1/me", headers: headers(bearer: token),
+                                          body: try json(["workStart": 17, "workEnd": 9]))
+            XCTAssertEqual(badHours.status, .badRequest)
+
+            let patched = try await send(h, .PATCH, "/api/v1/me", headers: headers(bearer: token),
+                                         body: try json(["workDays": [1, 2, 3, 4, 5], "workStart": 8, "workEnd": 16]))
+            XCTAssertEqual(patched.status, .ok)
+            let me = try patched.decode(UserDTO.self)
+            XCTAssertEqual(me.workDays, [1, 2, 3, 4, 5])
+            XCTAssertEqual(me.workEnd, 16)
+
+            let empty = try await send(h, .GET, "/api/v1/insights?from=2020-01-01&to=2020-02-01&lang=de", headers: headers(bearer: token))
+            XCTAssertEqual(empty.status, .ok)
+            XCTAssertEqual(try empty.decode([Insight].self).count, 0)
+            let reversed = try await send(h, .GET, "/api/v1/insights?from=2020-02-01&to=2020-01-01", headers: headers(bearer: token))
+            XCTAssertEqual(reversed.status, .badRequest)
+            let anonymous = try await send(h, .GET, "/api/v1/insights", headers: headers())
+            XCTAssertEqual(anonymous.status, .unauthorized)
+        }
+    }
+
     // MARK: - Helpers
 
     private struct Harness {

@@ -50,6 +50,36 @@ enum Stats {
         pearson(ranks(x), ranks(y))
     }
 
+    static func variance(_ values: [Double]) -> Double {
+        guard values.count > 1 else { return 0 }
+        let m = mean(values)
+        return values.reduce(0) { $0 + ($1 - m) * ($1 - m) } / Double(values.count - 1)
+    }
+
+    static func standardDeviation(_ values: [Double]) -> Double {
+        variance(values).squareRoot()
+    }
+
+    /// Welch's two-sample test of `a` against `b`: the difference of means, the two-sided p-value of its normal
+    /// approximation, and Cohen's d with the pooled standard deviation.
+    static func welch(_ a: [Double], _ b: [Double]) -> (diff: Double, p: Double, d: Double) {
+        let va = variance(a), vb = variance(b)
+        let na = Double(a.count), nb = Double(b.count)
+        let diff = mean(a) - mean(b)
+        let se = (va / na + vb / nb).squareRoot()
+        let p = se > 0 ? twoSidedP(diff / se) : 1
+        let pooled = ((na - 1) * va + (nb - 1) * vb) / (na + nb - 2)
+        let d = pooled > 0 ? diff / pooled.squareRoot() : 0
+        return (diff, p, d)
+    }
+
+    /// Upper tail of a chi-square distribution, by the Wilson–Hilferty cube-root approximation.
+    static func chiSquareSurvival(_ x: Double, df k: Double) -> Double {
+        guard x > 0 else { return 1 }
+        let z = (pow(x / k, 1.0 / 3.0) - (1 - 2 / (9 * k))) / (2 / (9 * k)).squareRoot()
+        return 0.5 * erfc(z / 2.0.squareRoot())
+    }
+
     /// Two-sided p-value of a standard normal statistic.
     static func twoSidedP(_ z: Double) -> Double {
         erfc(abs(z) / 2.0.squareRoot())

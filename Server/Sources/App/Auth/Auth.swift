@@ -32,6 +32,11 @@ struct UserDTO: Content {
     let createdAt: Date
     /// IANA name, such as Europe/Berlin. Day boundaries for every daily value follow it.
     let timeZone: String
+    /// ISO weekdays of the working week, 1 = Monday … 7 = Sunday. Stress by context and social jetlag use them.
+    let workDays: [Int]
+    /// Working hours as whole hours: start (0…23) and end (1…24, exclusive).
+    let workStart: Int
+    let workEnd: Int
 }
 
 struct TokenResponse: Content {
@@ -55,6 +60,9 @@ struct Credentials: Content {
 
 struct MePatch: Content {
     let timeZone: String?
+    let workDays: [Int]?
+    let workStart: Int?
+    let workEnd: Int?
 }
 
 /// The user behind a token, read straight from SQL.
@@ -63,8 +71,14 @@ struct AuthenticatedUser: Decodable, Sendable {
     let email: String
     let createdAt: Date
     let timeZone: String
+    let workDays: [Int]
+    let workStart: Int
+    let workEnd: Int
 
-    var dto: UserDTO { UserDTO(id: id, email: email, createdAt: createdAt, timeZone: timeZone) }
+    var dto: UserDTO {
+        UserDTO(id: id, email: email, createdAt: createdAt, timeZone: timeZone,
+                workDays: workDays, workStart: workStart, workEnd: workEnd)
+    }
 
     /// Gregorian calendar in the user's time zone: the day boundaries of every daily value.
     var calendar: Calendar { userCalendar(timeZone) }
@@ -90,7 +104,8 @@ extension Request {
     func currentUser() async throws -> AuthenticatedUser? {
         guard let token = presentedToken() else { return nil }
         return try await sql.raw("""
-            SELECT u.id, u.email, u.created_at AS "createdAt", u.time_zone AS "timeZone"
+            SELECT u.id, u.email, u.created_at AS "createdAt", u.time_zone AS "timeZone",
+                   u.work_days AS "workDays", u.work_start AS "workStart", u.work_end AS "workEnd"
             FROM access_tokens t JOIN users u ON u.id = t.user_id
             WHERE t.token_hash = \(bind: SessionToken.hash(token)) AND t.created_at > now() - interval '365 days'
             """).first(decoding: AuthenticatedUser.self)
@@ -146,7 +161,8 @@ enum Accounts {
             guard let user = try await sql.raw("""
                 INSERT INTO users (email, password_hash, time_zone) VALUES (\(bind: email), \(bind: hash), \(bind: defaultTimeZone))
                 ON CONFLICT (email) DO NOTHING
-                RETURNING id, email, created_at AS "createdAt", time_zone AS "timeZone"
+                RETURNING id, email, created_at AS "createdAt", time_zone AS "timeZone",
+                    work_days AS "workDays", work_start AS "workStart", work_end AS "workEnd"
                 """).first(decoding: UserDTO.self)
             else {
                 throw Abort(.conflict, reason: "That email is already registered.")
@@ -166,7 +182,8 @@ enum Accounts {
             throw Abort(.tooManyRequests, reason: "Too many failed sign-in attempts. Try again in 15 minutes.")
         }
         let record = try await req.sql.raw("""
-            SELECT id, email, created_at AS "createdAt", time_zone AS "timeZone", password_hash AS "passwordHash"
+            SELECT id, email, created_at AS "createdAt", time_zone AS "timeZone", password_hash AS "passwordHash",
+                work_days AS "workDays", work_start AS "workStart", work_end AS "workEnd"
             FROM users WHERE email = \(bind: email)
             """).first(decoding: UserRecord.self)
         guard let record, (try? Bcrypt.verify(password, created: record.passwordHash)) == true else {
@@ -174,7 +191,7 @@ enum Accounts {
             throw Abort(.unauthorized, reason: "Wrong email or password.")
         }
         await throttle.reset(key)
-        let user = UserDTO(id: record.id, email: record.email, createdAt: record.createdAt, timeZone: record.timeZone)
+        let user = record.dto
         return TokenResponse(token: try await issueToken(for: user.id, on: req), user: user)
     }
 
@@ -183,14 +200,35 @@ enum Accounts {
     }
 
     /// Changes the user's time zone and rebuilds every daily value, because day boundaries move.
-    static func setTimeZone(_ identifier: String, user: AuthenticatedUser, on req: Request) async throws -> UserDTO {
+    static func setTimeZone(_ identifier: String, user: AuthenticatedUser, on req: Request) async throws {
         try await req.db.transaction { tx in
             let sql = try tx.sql()
             try await Ingest.lock(sql)
-            try await sql.raw("UPDATE users SET time_zone = \(bind: identifier) WHERE id = \(bind: user.id)").run()
+            try await sql.raw("""
+                UPDATE users SET time_zone = \(bind: identifier), insights_dirty_at = now() WHERE id = \(bind: user.id)
+                """).run()
             try await Rollup.rebuild(userID: user.id, calendar: userCalendar(identifier), sql: sql)
         }
-        return UserDTO(id: user.id, email: user.email, createdAt: user.createdAt, timeZone: identifier)
+    }
+
+    /// Sets any of the working days and hours that the request names. Insights are computed again afterwards.
+    static func setWorkingHours(_ body: MePatch, user: AuthenticatedUser, on req: Request) async throws {
+        let days = body.workDays ?? user.workDays
+        let start = body.workStart ?? user.workStart
+        let end = body.workEnd ?? user.workEnd
+        guard !days.isEmpty, days.allSatisfy({ (1...7).contains($0) }), Set(days).count == days.count,
+              (0..<24).contains(start), (1...24).contains(end), start < end else {
+            throw Abort(.badRequest, reason: "Working days are 1 (Monday) to 7 (Sunday), each once. Hours are whole hours with the start before the end.")
+        }
+        try await req.db.transaction { tx in
+            let sql = try tx.sql()
+            try await Ingest.lock(sql)
+            try await sql.raw("""
+                UPDATE users SET work_days = \(bind: days)::integer[], work_start = \(bind: start), work_end = \(bind: end),
+                    insights_dirty_at = now()
+                WHERE id = \(bind: user.id)
+                """).run()
+        }
     }
 
     private static func issueToken(for userID: UUID, on req: Request) async throws -> String {
@@ -207,7 +245,15 @@ private struct UserRecord: Decodable {
     let email: String
     let createdAt: Date
     let timeZone: String
+    let workDays: [Int]
+    let workStart: Int
+    let workEnd: Int
     let passwordHash: String
+
+    var dto: UserDTO {
+        UserDTO(id: id, email: email, createdAt: createdAt, timeZone: timeZone,
+                workDays: workDays, workStart: workStart, workEnd: workEnd)
+    }
 }
 
 /// Counts failed sign-ins per client address and email. After 10 failures in 15 minutes the pair is blocked.
