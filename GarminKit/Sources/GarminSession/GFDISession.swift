@@ -70,6 +70,9 @@ final class GFDISession {
 
     // New sync protocol: the files are listed and pulled as protobuf messages, and their bytes arrive on a file transfer service.
     private var listing = false
+    /// New-sync watches first get the legacy directory request, as in Gadgetbridge: it flushes the monitoring files,
+    /// and its directory also lists health files Garmin Connect already synced, which the new listing hides.
+    private var legacyFirst = false
     /// The second listing pass of a connection: recent health files, including ones another app (Garmin Connect)
     /// already marked synced, which the first pass excludes.
     private var listingRecent = false
@@ -143,6 +146,7 @@ final class GFDISession {
         transferTask?.cancel()
         transferTask = nil
         listing = false
+        legacyFirst = false
         pendingItems = []
         currentItem = nil
     }
@@ -302,11 +306,7 @@ final class GFDISession {
         syncDone = 0
         syncedActivities = 0
         output(.progress(0, "Listing activities"))
-        if usesNewSync {
-            listing = true
-            await sendFileList()
-            return
-        }
+        legacyFirst = usesNewSync
         download = Download(file: nil)
         await send(GFDIDownloadRequest(fileIndex: 0, dataOffset: 0, mode: .new, crcSeed: 0, dataSize: 0))
     }
@@ -351,7 +351,13 @@ final class GFDISession {
                 await archive(file)
             }
         } else {
-            let files = Self.directoryEntries(bytes).filter { $0.isFIT }
+            var files = Self.directoryEntries(bytes).filter { $0.isFIT }
+            if legacyFirst {
+                let bySubType = Dictionary(grouping: files, by: \.subType).mapValues(\.count)
+                SyncDiagnostics.log("legacy directory: \(files.count) FIT files by type \(bySubType.sorted { $0.key < $1.key })")
+                // Activities and the rest come through the new listing; this pass only adds health files.
+                files = files.filter { Self.legacyHealthTypes.contains($0.subType) }
+            }
             pending += files
             syncTotal += files.count
         }
@@ -374,8 +380,17 @@ final class GFDISession {
             await send(GFDIDownloadRequest(fileIndex: file.index, dataOffset: 0, mode: .new, crcSeed: 0, dataSize: 0))
             return
         }
+        if legacyFirst {
+            legacyFirst = false
+            listing = true
+            await sendFileList()
+            return
+        }
         await finishSync()
     }
+
+    /// Monitoring, sleep, metrics, HRV status and the other daily health files in Gadgetbridge's pull list.
+    static let legacyHealthTypes: Set<UInt8> = [32, 44, 49, 68, 70, 71, 73, 77, 79, 82]
 
     /// Hands a downloaded file to the import stage. True once the file is in the inbox, which is when the watch may
     /// archive it. A file that could not be kept stays on the watch for the next sync.

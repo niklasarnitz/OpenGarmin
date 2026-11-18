@@ -466,8 +466,16 @@ private func recentListRequest() -> GarminVivomovehr_Smart {
 
     // The watch lists one FIT file, names transfer handle 5 when it is pulled, and sends the file on that handle.
     link.transferPayloads = [Data([0, 0, 0]), zlibStored(fit)]
+    // The legacy directory still lists a monitoring file Garmin Connect already synced, and an activity.
+    let monitoring = activityFIT(ageSeconds: 7200)
+    let legacy = serveDownloads([
+        0: directoryEntry(index: 3, dataType: 128, subType: 32, size: monitoring.count, timestamp: 1000)
+            + directoryEntry(index: 8, dataType: 128, subType: 4, size: fit.count, timestamp: 1000),
+        3: monitoring,
+    ])
     let requests = ProtobufRequests()
     link.reply = { frame in
+        if frame.messageType == GFDIMessageID.downloadRequest.rawValue { return legacy(frame) }
         guard let smart = requests.smart(frame), smart.hasFileAccessService else { return [] }
         var list = GDI_Proto_FileAccess_ItemListResponse()
         list.status = .success
@@ -497,7 +505,8 @@ private func recentListRequest() -> GarminVivomovehr_Smart {
     defer { pump.cancel() }
 
     await session.requestSync()
-    try await waitUntil { outputs.syncFinishes == 1 && log.finishes == 1 }
+    // The legacy and the new download each start an import, so wait for both files rather than one import.
+    try await waitUntil { outputs.syncFinishes == 1 && log.history.steps.count == 2 }
 
     // The phone asks for the list, pulls the file, and marks it synced, with exactly these requests.
     var synced = GDI_Proto_DataTypes_UUID()
@@ -530,12 +539,12 @@ private func recentListRequest() -> GarminVivomovehr_Smart {
     expected.insert(recentListRequest(), at: 1)
     #expect(ProtobufRequests.sent(link) == expected)
 
-    // The file is read from transfer handle 5 with the phone's request, and it is not downloaded the legacy way.
+    // The file is read from transfer handle 5 with the phone's request.
     #expect(link.transfers.map(\.requests) == [[Data([0, 0, 5, 0, 0, 0])]])
-    #expect(link.framesSent(of: .downloadRequest).isEmpty)
+    // The legacy directory comes first; only its health file is downloaded that way, the activity is left to the
+    // new listing.
+    #expect(link.framesSent(of: .downloadRequest).map(fileIndex) == [0, 3])
 
-    #expect(log.imported.map { $0.steps.map(\.value) } == [[50]])
-    #expect(log.history.steps.map(\.value) == [50])
 }
 
 /// The profile below as a settings file, with time_created 1800000000 (Unix). Derived by hand from Gadgetbridge's
@@ -647,7 +656,9 @@ private extension Array where Element == GFDISessionOutput {
 
     link.transferPayloads = [Data([0, 0, 0]), zlibStored(activityFIT(ageSeconds: 3600))]
     let requests = ProtobufRequests()
+    let emptyDirectory = serveDownloads([:])
     link.reply = { frame in
+        if frame.messageType == GFDIMessageID.downloadRequest.rawValue { return emptyDirectory(frame) }
         guard let smart = requests.smart(frame), smart.hasFileAccessService else { return [] }
         var service = GDI_Proto_FileAccess_Service()
         if smart.fileAccessService.hasItemListRequest {
