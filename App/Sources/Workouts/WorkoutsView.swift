@@ -48,6 +48,9 @@ struct WorkoutsView: View {
             .navigationTitle("Workouts")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
+                    WatchStatusPill(state: app.watch.state, battery: app.watch.battery, glass: false)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("New training plan", systemImage: "calendar.badge.plus") { isPlanning = true }
                 }
                 ToolbarItem(placement: .topBarTrailing) {

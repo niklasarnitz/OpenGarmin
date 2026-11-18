@@ -19,8 +19,6 @@ struct TodayView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                SyncProgressView(state: app.watch.state, file: app.watch.fileProgress)
-                    .padding(.horizontal)
                 if data.isEmpty {
                     EmptyDataCard(title: "No data yet", symbol: "heart.text.square",
                                   message: "Sync your watch to see heart rate, sleep and activity here.")

@@ -23,6 +23,11 @@ struct ActivitiesView: View {
                 }
             }
             .navigationTitle("Activities")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    WatchStatusPill(state: app.watch.state, battery: app.watch.battery, glass: false)
+                }
+            }
             .navigationDestination(for: Activity.self) { ActivityDetailView(activity: $0) }
             .refreshable { await app.watch.syncNow() }
         }

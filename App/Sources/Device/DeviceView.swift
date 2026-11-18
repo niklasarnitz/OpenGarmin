@@ -81,6 +81,7 @@ struct DeviceView: View {
                     .padding(.top, 6)
             }
         }
+        .frame(maxWidth: .infinity)
         .tile()
     }
 
