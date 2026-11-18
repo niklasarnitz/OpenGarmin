@@ -1,0 +1,736 @@
+/* Palette: a field notebook. Sage paper, ink-green type, one rust signal colour for what needs attention.
+   Display type is Instrument Serif; everything else is Instrument Sans. Charts mirror these values in components/theme.ts. */
+
+:root {
+  --paper: #eef0ea;
+  --paper-2: #e3e8df;
+  --ink: #16201c;
+  --muted: #5f6b64;
+  --rule: #cdd5cc;
+  --grid: #dde3da;
+  --garmin: #0b6b5c;
+  --apple: #4150a8;
+  --signal: #c8452a;
+  --pos-rgb: 11, 107, 92;
+  --neg-rgb: 200, 69, 42;
+  --serif: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0d1411;
+    --paper-2: #131c18;
+    --ink: #e7ebe4;
+    --muted: #8a968e;
+    --rule: #26322c;
+    --grid: #1c2620;
+    --garmin: #43b9a3;
+    --apple: #8f9be3;
+    --signal: #ff7150;
+    --pos-rgb: 67, 185, 163;
+    --neg-rgb: 255, 113, 80;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+body {
+  font: 15px/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 400;
+}
+
+h2 {
+  font-family: var(--serif);
+  font-size: clamp(30px, 3.6vw, 40px);
+  line-height: 1.05;
+}
+
+h3 {
+  font-family: var(--serif);
+  font-size: 26px;
+  line-height: 1.15;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.boot {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+/* MARK: - Frame */
+
+.shell {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 20px 80px;
+}
+
+.masthead {
+  display: flex;
+  align-items: center;
+  gap: 8px 28px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--rule);
+  flex-wrap: wrap;
+}
+
+.brand {
+  font-family: var(--serif);
+  font-size: 28px;
+  text-decoration: none;
+  margin-right: auto;
+  line-height: 1;
+}
+
+.brand i {
+  font-style: normal;
+  color: var(--signal);
+}
+
+nav.main {
+  display: flex;
+  gap: 20px;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+nav.main a {
+  white-space: nowrap;
+  text-decoration: none;
+  color: var(--muted);
+  padding: 4px 0;
+  border-bottom: 2px solid transparent;
+}
+
+nav.main a:hover {
+  color: var(--ink);
+}
+
+nav.main a[aria-current="page"] {
+  color: var(--ink);
+  border-bottom-color: var(--signal);
+}
+
+.masthead-end {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.badge {
+  font-size: 12px;
+  color: var(--signal);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 0 9px;
+}
+
+main {
+  padding-top: 36px;
+}
+
+button.ghost,
+button.primary {
+  border-radius: 999px;
+  padding: 6px 14px;
+  cursor: pointer;
+  background: none;
+  border: 1px solid var(--rule);
+}
+
+button.ghost:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.primary {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+  padding: 10px 22px;
+}
+
+button.primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* MARK: - Type and stats */
+
+.headline {
+  font-family: var(--serif);
+  font-size: clamp(34px, 5.4vw, 60px);
+  line-height: 1.02;
+  max-width: 22ch;
+  margin: 0 0 40px;
+}
+
+.lead {
+  margin: 8px 0 0;
+  color: var(--muted);
+  max-width: 64ch;
+  font-size: 14px;
+}
+
+.finding {
+  font-size: 17px;
+  margin: 18px 0 10px;
+  max-width: 60ch;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  border-top: 1px solid var(--rule);
+  margin: 18px 0 8px;
+}
+
+.stat {
+  padding: 14px 16px 14px 0;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.stat-value {
+  font-size: 30px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  margin-top: 2px;
+  line-height: 1.15;
+}
+
+.stat-unit {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 4px;
+}
+
+.stat-note {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 4px 0 0;
+}
+
+.stat-note.up {
+  color: var(--garmin);
+}
+
+.stat-note.down {
+  color: var(--signal);
+}
+
+/* MARK: - Sections */
+
+.section {
+  border-top: 1px solid var(--rule);
+  padding: 28px 0 12px;
+  margin-top: 32px;
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px 28px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.section-aside {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  margin: 4px 0 24px;
+}
+
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.segmented button {
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.segmented button:hover {
+  color: var(--ink);
+}
+
+.segmented button.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-bottom: 20px;
+}
+
+.chips button {
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.chips button:hover {
+  color: var(--ink);
+}
+
+.chips button[aria-pressed="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--signal);
+}
+
+.select {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.select select {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.check {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.notice {
+  border-left: 3px solid var(--signal);
+  padding: 10px 16px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.notice p {
+  margin: 0;
+}
+
+.error {
+  color: var(--signal);
+  margin: 0;
+}
+
+.chart {
+  width: 100%;
+}
+
+.route-map {
+  height: 340px;
+  border-radius: 4px;
+}
+
+.back {
+  font-size: 14px;
+  margin: 0 0 16px;
+}
+
+/* MARK: - Overview */
+
+.sparks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 0 48px;
+}
+
+.spark-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--rule);
+  padding: 10px 0;
+}
+
+.spark {
+  color: var(--garmin);
+  flex: none;
+  max-width: 100%;
+}
+
+.spark-name {
+  font-size: 14px;
+}
+
+.year-strip svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.year-label {
+  font-size: 11px;
+  fill: var(--muted);
+}
+
+.q0 {
+  fill: rgba(var(--pos-rgb), 0.1);
+}
+
+.q1 {
+  fill: rgba(var(--pos-rgb), 0.3);
+}
+
+.q2 {
+  fill: rgba(var(--pos-rgb), 0.58);
+}
+
+.q3 {
+  fill: rgba(var(--pos-rgb), 0.92);
+}
+
+/* MARK: - Tables */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 9px 12px 9px 0;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+
+th {
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+tbody th {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+td.num,
+th.num {
+  text-align: right;
+}
+
+td a {
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule);
+}
+
+td a:hover {
+  color: var(--signal);
+  border-bottom-color: var(--signal);
+}
+
+.matrix-wrap {
+  overflow-x: auto;
+  margin-bottom: 28px;
+}
+
+.matrix {
+  width: auto;
+  border-collapse: separate;
+  border-spacing: 2px;
+}
+
+.matrix th {
+  font-size: 12px;
+  font-weight: 400;
+  text-align: center;
+  padding: 6px 6px;
+  min-width: 84px;
+  border: 0;
+}
+
+.matrix tbody th {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.matrix td {
+  padding: 0;
+  border: 0;
+}
+
+.matrix button {
+  width: 84px;
+  height: 46px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.matrix button[aria-pressed="true"] {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+.matrix .diag {
+  display: block;
+  text-align: center;
+  color: var(--muted);
+  line-height: 46px;
+}
+
+.pair-title {
+  margin-top: 8px;
+  font-size: 26px;
+}
+
+table.sources td,
+table.sources th {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+/* MARK: - Trends, zones, login */
+
+.trends {
+  display: grid;
+  gap: 44px;
+}
+
+.trend header p {
+  margin: 6px 0 0;
+  font-size: 17px;
+}
+
+.zones {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.zone {
+  display: grid;
+  grid-template-columns: 110px 1fr 72px;
+  gap: 12px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.zone-track {
+  height: 10px;
+  background: var(--paper-2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.zone-fill {
+  height: 100%;
+  background: var(--signal);
+}
+
+.zone-time {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: min(380px, 100%);
+}
+
+.login-card h1 {
+  font-family: var(--serif);
+  font-size: 52px;
+  line-height: 1;
+  margin-bottom: 14px;
+}
+
+.login form {
+  display: grid;
+  gap: 16px;
+  margin-top: 30px;
+}
+
+.login label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.login input {
+  font-size: 16px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ink);
+  padding: 8px 0;
+  border-radius: 0;
+}
+
+.login button.primary {
+  justify-self: start;
+}
+
+/* MARK: - Findings */
+
+.feed {
+  display: grid;
+  gap: 40px;
+}
+
+.feed-top {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 32px 36px;
+}
+
+.insight {
+  border-top: 1px solid var(--rule);
+  padding-top: 16px;
+  min-width: 0;
+}
+
+.insight h3 {
+  font-size: 24px;
+}
+
+.insight .finding {
+  font-size: 16px;
+  margin: 8px 0 12px;
+}
+
+.insight-meta {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 10px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.insight-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 10px 0 0;
+  font-size: 14px;
+}
+
+.insight-links a {
+  text-decoration: none;
+  border-bottom: 1px solid var(--signal);
+}
+
+.insight-links a:hover {
+  color: var(--signal);
+}
+
+.insight-detail {
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.insight-detail summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+/* MARK: - Small screens */
+
+@media (max-width: 640px) {
+  .shell {
+    padding: 0 16px 56px;
+  }
+
+  main {
+    padding-top: 24px;
+  }
+
+  .stat-value {
+    font-size: 25px;
+  }
+
+  .zone {
+    grid-template-columns: 90px 1fr 60px;
+  }
+}
