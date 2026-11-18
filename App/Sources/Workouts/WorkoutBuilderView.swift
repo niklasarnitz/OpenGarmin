@@ -1,4 +1,5 @@
 import SwiftUI
+import GarminFIT
 import GarminModels
 
 struct WorkoutBuilderView: View {
@@ -11,6 +12,11 @@ struct WorkoutBuilderView: View {
     @State private var isAddingStep = false
 
     private static let sports: [Sport] = [.running, .cycling, .walking, .hiking, .swimming, .rowing, .training, .hiit, .fitnessEquipment]
+
+    /// Training steps with an exercise are strength training, which the watch offers its exercise list for.
+    private var strengthSubSport: Int? {
+        sport == .training && steps.contains { $0.exercise != nil } ? 20 : nil
+    }
 
     var body: some View {
         NavigationStack {
@@ -40,7 +46,7 @@ struct WorkoutBuilderView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        onSave(WorkoutPlan(name: name, sport: sport, steps: steps))
+                        onSave(WorkoutPlan(name: name, sport: sport, subSport: strengthSubSport, steps: steps))
                         dismiss()
                     }
                     .disabled(steps.isEmpty)
@@ -64,6 +70,9 @@ struct StepEditor: View {
     @State private var ending: Ending = .time
     @State private var minutes = 5
     @State private var metres = 1000
+    @State private var reps = 10
+    @State private var exerciseID = ""
+    @State private var weightKg = 20.0
     @State private var repeatFrom = 1
     @State private var repeatCount = 4
     @State private var targetKind: TargetKind = .off
@@ -72,7 +81,7 @@ struct StepEditor: View {
     @State private var slowestPace = 330
 
     enum Ending: String, CaseIterable, Identifiable {
-        case time = "Time", distance = "Distance", open = "Open", repeatSteps = "Repeat"
+        case time = "Time", distance = "Distance", reps = "Reps", open = "Open", repeatSteps = "Repeat"
         var id: Self { self }
     }
 
@@ -100,6 +109,8 @@ struct StepEditor: View {
                         Stepper("\(minutes) min", value: $minutes, in: 1...180)
                     case .distance:
                         Stepper("\(metres) m", value: $metres, in: 100...10_000, step: 100)
+                    case .reps:
+                        Stepper("\(reps) reps", value: $reps, in: 1...999)
                     case .open:
                         Text("Ends when you press lap on the watch.")
                             .foregroundStyle(.secondary)
@@ -109,6 +120,16 @@ struct StepEditor: View {
                     }
                 }
                 if ending != .repeatSteps {
+                    Section("Exercise") {
+                        Picker("Exercise", selection: $exerciseID) {
+                            Text("None").tag("")
+                            ForEach(GarminExerciseCatalog.strength) { Text($0.name).tag($0.id) }
+                        }
+                        .pickerStyle(.navigationLink)
+                        if exercise != nil {
+                            Stepper(String(format: "%.1f kg", weightKg), value: $weightKg, in: 0...500, step: 2.5)
+                        }
+                    }
                     Section("Target") {
                         Picker("Target", selection: $targetKind) {
                             ForEach(TargetKind.allCases) { Text($0.rawValue).tag($0) }
@@ -135,7 +156,8 @@ struct StepEditor: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
-                        onAdd(WorkoutStep(name: name, intensity: intensity, duration: duration, target: target))
+                        onAdd(WorkoutStep(name: name, intensity: intensity, duration: duration, target: target,
+                                          exercise: exercise, weightKg: exercise == nil ? nil : weightKg))
                         dismiss()
                     }
                 }
@@ -143,10 +165,13 @@ struct StepEditor: View {
         }
     }
 
+    private var exercise: WorkoutExercise? { GarminExerciseCatalog.exercise(id: exerciseID) }
+
     private var duration: WorkoutDurationType {
         switch ending {
         case .time: .time(seconds: minutes * 60)
         case .distance: .distance(meters: metres)
+        case .reps: .reps(count: reps)
         case .open: .open
         case .repeatSteps: .repeatUntilStepsComplete(fromStep: repeatFrom - 1, count: repeatCount)
         }
@@ -191,6 +216,7 @@ extension WorkoutStep {
         switch duration {
         case .time(let seconds): ending = "\(seconds / 60) min"
         case .distance(let meters): ending = "\(meters) m"
+        case .reps(let count): ending = "\(count) reps"
         case .open: ending = "Open"
         case .repeatUntilStepsComplete(let from, let count): ending = "Repeat \(count) times from step \(from + 1)"
         default: ending = "Custom"

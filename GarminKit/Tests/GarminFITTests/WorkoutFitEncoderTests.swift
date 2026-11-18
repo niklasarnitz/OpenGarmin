@@ -56,3 +56,55 @@ import GarminModels
     #expect(steps[4][1]?.int == 5)
     #expect(steps[4][7]?.int == 3)
 }
+
+@Test func encodesStrengthStepsWithExerciseWeightAndRepsExactly() throws {
+    let bench = WorkoutExercise(id: "bench_press/barbell_bench_press", name: "Barbell Bench Press", category: 0, code: 3)
+    let plank = WorkoutExercise(id: "plank/generic", name: "Plank", category: 19, code: nil)
+    let plan = WorkoutPlan(name: "Strength A", sport: .training, subSport: 20, steps: [
+        WorkoutStep(intensity: .active, duration: .reps(count: 10), exercise: bench, weightKg: 62.5),
+        WorkoutStep(intensity: .rest, duration: .time(seconds: 90)),
+        WorkoutStep(intensity: .active, duration: .reps(count: 8), exercise: bench, weightKg: 65),
+        WorkoutStep(name: "Hold", intensity: .active, duration: .time(seconds: 45), exercise: plank),
+    ])
+
+    let file = try FitDecoder.decode(WorkoutFitEncoder.encode(plan))
+
+    let workout = try #require(file.messages(26).first)
+    #expect(workout[4]?.int == 10) // sport: training
+    #expect(workout[11]?.int == 20) // sub_sport: strength training
+    #expect(workout[6]?.int == 4) // num_valid_steps
+
+    let steps = file.messages(27)
+    #expect(steps.count == 4)
+    // Reps: duration type 29 with the count as the value. Bench press is category 0, name 3. 62.5 kg is 6250 in
+    // hundredths of a kilogram, and the display unit is kilograms (1).
+    #expect(steps[0][1]?.int == 29)
+    #expect(steps[0][2]?.int == 10)
+    #expect(steps[0][10]?.int == 0)
+    #expect(steps[0][11]?.int == 3)
+    #expect(steps[0][12]?.int == 6250)
+    #expect(steps[0][13]?.int == 1)
+    // Rest: 90 seconds in milliseconds, no exercise and no weight.
+    #expect(steps[1][1]?.int == 0)
+    #expect(steps[1][2]?.int == 90_000)
+    #expect(steps[1][7]?.int == 1)
+    #expect(steps[1][10] == nil)
+    #expect(steps[1][12] == nil)
+    // 65 kg is 6500.
+    #expect(steps[2][12]?.int == 6500)
+    // Without a name code the step carries only the category.
+    #expect(steps[3][10]?.int == 19)
+    #expect(steps[3][11] == nil)
+
+    // One exercise_title per distinct exercise, in the order the steps first use them.
+    let titles = file.messages(264)
+    #expect(titles.count == 2)
+    #expect(titles[0][0]?.int == 0)
+    #expect(titles[0][1]?.int == 3)
+    #expect(titles[0][2]?.string == "Barbell Bench Press")
+    #expect(titles[0][254]?.int == 0)
+    #expect(titles[1][0]?.int == 19)
+    #expect(titles[1][1] == nil)
+    #expect(titles[1][2]?.string == "Plank")
+    #expect(titles[1][254]?.int == 1)
+}

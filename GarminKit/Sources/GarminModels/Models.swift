@@ -107,8 +107,98 @@ public struct SleepSession: Sendable, Codable, Hashable {
     public var intervals: [SleepInterval]
     /// Garmin sleep score 0-100 when the watch provides it.
     public var score: Int?
-    public init(start: Date, end: Date, intervals: [SleepInterval], score: Int? = nil) {
+    /// The components the overall score is made of, when the watch sends them.
+    public var scoreBreakdown: SleepScoreBreakdown?
+    public init(start: Date, end: Date, intervals: [SleepInterval], score: Int? = nil,
+                scoreBreakdown: SleepScoreBreakdown? = nil) {
         self.start = start; self.end = end; self.intervals = intervals; self.score = score
+        self.scoreBreakdown = scoreBreakdown
+    }
+}
+
+/// The component scores of a sleep score, each 0-100, and the raw awakening count and stress during sleep.
+public struct SleepScoreBreakdown: Sendable, Codable, Hashable {
+    public var duration: Int?
+    public var quality: Int?
+    public var recovery: Int?
+    public var deep: Int?
+    public var light: Int?
+    public var rem: Int?
+    public var awakeTime: Int?
+    public var awakenings: Int?
+    public var interruptions: Int?
+    public var restlessness: Int?
+    public var combinedAwake: Int?
+    public var awakeningsCount: Int?
+    /// Average stress while asleep, 0-100.
+    public var averageStress: Double?
+    public init(duration: Int? = nil, quality: Int? = nil, recovery: Int? = nil, deep: Int? = nil, light: Int? = nil,
+                rem: Int? = nil, awakeTime: Int? = nil, awakenings: Int? = nil, interruptions: Int? = nil,
+                restlessness: Int? = nil, combinedAwake: Int? = nil, awakeningsCount: Int? = nil,
+                averageStress: Double? = nil) {
+        self.duration = duration; self.quality = quality; self.recovery = recovery; self.deep = deep
+        self.light = light; self.rem = rem; self.awakeTime = awakeTime; self.awakenings = awakenings
+        self.interruptions = interruptions; self.restlessness = restlessness; self.combinedAwake = combinedAwake
+        self.awakeningsCount = awakeningsCount; self.averageStress = averageStress
+    }
+}
+
+/// A sleep stream minute of a watch that does not stage sleep (FIT 274 rows, with the awake and unmeasurable
+/// minutes from FIT 275). Raw minutes carry heart rate and movement for the app to classify.
+public enum RawSleepMinuteKind: String, Sendable, Codable, CaseIterable {
+    case raw, awake, unmeasurable
+}
+
+public struct RawSleepMinute: Sendable, Codable, Hashable {
+    public var date: Date
+    public var kind: RawSleepMinuteKind
+    public var heartRate: Double?
+    /// Movement count for the minute, zero when still.
+    public var movement: Double?
+    public init(date: Date, kind: RawSleepMinuteKind, heartRate: Double? = nil, movement: Double? = nil) {
+        self.date = date; self.kind = kind; self.heartRate = heartRate; self.movement = movement
+    }
+}
+
+/// A nap the watch recorded. Naps have no stages.
+public struct Nap: Sendable, Codable, Hashable {
+    public var start: Date
+    public var end: Date
+    public init(start: Date, end: Date) { self.start = start; self.end = end }
+}
+
+/// The watch's HRV status for a night (FIT 370): the weekly average, last night, and the baseline it compares to.
+/// Values are RMSSD in ms.
+public enum HRVStatus: String, Sendable, Codable, CaseIterable {
+    case none, poor, low, unbalanced, balanced
+}
+
+public struct HRVStatusSample: Sendable, Codable, Hashable {
+    public var date: Date
+    public var weeklyAverage: Double?
+    public var lastNightAverage: Double?
+    public var lastNight5MinHigh: Double?
+    public var baselineLowUpper: Double?
+    public var baselineBalancedLower: Double?
+    public var baselineBalancedUpper: Double?
+    public var status: HRVStatus?
+    public init(date: Date, weeklyAverage: Double? = nil, lastNightAverage: Double? = nil,
+                lastNight5MinHigh: Double? = nil, baselineLowUpper: Double? = nil,
+                baselineBalancedLower: Double? = nil, baselineBalancedUpper: Double? = nil, status: HRVStatus? = nil) {
+        self.date = date; self.weeklyAverage = weeklyAverage; self.lastNightAverage = lastNightAverage
+        self.lastNight5MinHigh = lastNight5MinHigh; self.baselineLowUpper = baselineLowUpper
+        self.baselineBalancedLower = baselineBalancedLower; self.baselineBalancedUpper = baselineBalancedUpper
+        self.status = status
+    }
+}
+
+/// The watch's own training load (FIT 378): acute (7 day) and chronic (28 day) load.
+public struct TrainingLoadSample: Sendable, Codable, Hashable {
+    public var date: Date
+    public var acute: Double?
+    public var chronic: Double?
+    public init(date: Date, acute: Double? = nil, chronic: Double? = nil) {
+        self.date = date; self.acute = acute; self.chronic = chronic
     }
 }
 
@@ -224,8 +314,46 @@ public struct HealthBatch: Sendable, Codable, Hashable {
     public var hrv: [PointSample] = []
     public var sleep: [SleepSession] = []
     public var activities: [Activity] = []
+    /// Minutes of the raw sleep stream of a watch that does not stage sleep (FIT 273/274).
+    public var rawSleepMinutes: [RawSleepMinute] = []
+    public var naps: [Nap] = []
+    public var hrvStatus: [HRVStatusSample] = []
+    /// Training readiness score 0-100.
+    public var trainingReadiness: [PointSample] = []
+    public var trainingLoad: [TrainingLoadSample] = []
+    /// Minutes until the watch considers the body recovered from the last activity.
+    public var recoveryTime: [PointSample] = []
 
     public init() {}
+
+    /// Older histories were saved without the newer fields, so every array decodes as empty when it is missing.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func list<T: Decodable>(_ key: CodingKeys) throws -> [T] {
+            try c.decodeIfPresent([T].self, forKey: key) ?? []
+        }
+        heartRate = try list(.heartRate)
+        restingHeartRate = try list(.restingHeartRate)
+        steps = try list(.steps)
+        activeEnergyKcal = try list(.activeEnergyKcal)
+        restingEnergyKcal = try list(.restingEnergyKcal)
+        distance = try list(.distance)
+        floorsClimbed = try list(.floorsClimbed)
+        intensityMinutes = try list(.intensityMinutes)
+        stress = try list(.stress)
+        bodyBattery = try list(.bodyBattery)
+        spo2 = try list(.spo2)
+        respirationRate = try list(.respirationRate)
+        hrv = try list(.hrv)
+        sleep = try list(.sleep)
+        activities = try list(.activities)
+        rawSleepMinutes = try list(.rawSleepMinutes)
+        naps = try list(.naps)
+        hrvStatus = try list(.hrvStatus)
+        trainingReadiness = try list(.trainingReadiness)
+        trainingLoad = try list(.trainingLoad)
+        recoveryTime = try list(.recoveryTime)
+    }
 
     public mutating func merge(_ other: HealthBatch) {
         heartRate += other.heartRate; restingHeartRate += other.restingHeartRate; steps += other.steps
@@ -233,6 +361,9 @@ public struct HealthBatch: Sendable, Codable, Hashable {
         distance += other.distance; floorsClimbed += other.floorsClimbed; intensityMinutes += other.intensityMinutes
         stress += other.stress; bodyBattery += other.bodyBattery; spo2 += other.spo2
         respirationRate += other.respirationRate; hrv += other.hrv; sleep += other.sleep; activities += other.activities
+        rawSleepMinutes += other.rawSleepMinutes; naps += other.naps; hrvStatus += other.hrvStatus
+        trainingReadiness += other.trainingReadiness; trainingLoad += other.trainingLoad
+        recoveryTime += other.recoveryTime
     }
 
     public var isEmpty: Bool { self == HealthBatch() }
@@ -248,6 +379,7 @@ public enum WorkoutDurationType: Sendable, Codable, Hashable {
     case heartRateLessThan(bpm: Int)
     case heartRateGreaterThan(bpm: Int)
     case repeatUntilStepsComplete(fromStep: Int, count: Int)
+    case reps(count: Int)
 }
 
 public enum WorkoutTarget: Sendable, Codable, Hashable {
@@ -263,6 +395,20 @@ public enum WorkoutIntensity: Int, Sendable, Codable, CaseIterable {
     case active = 0, rest = 1, warmup = 2, cooldown = 3, recovery = 4, interval = 5
 }
 
+/// An exercise from Garmin's strength catalog, identified on the watch by its category and name code.
+public struct WorkoutExercise: Sendable, Codable, Hashable, Identifiable {
+    /// The catalog id, such as "bench_press/barbell_bench_press".
+    public var id: String
+    public var name: String
+    /// The FIT exercise_category number.
+    public var category: Int
+    /// The FIT exercise_name number within the category. Nil for the category's generic exercise.
+    public var code: Int?
+    public init(id: String, name: String, category: Int, code: Int?) {
+        self.id = id; self.name = name; self.category = category; self.code = code
+    }
+}
+
 public struct WorkoutStep: Sendable, Codable, Hashable, Identifiable {
     public var id: UUID
     public var name: String?
@@ -270,10 +416,15 @@ public struct WorkoutStep: Sendable, Codable, Hashable, Identifiable {
     public var duration: WorkoutDurationType
     public var target: WorkoutTarget
     public var notes: String?
+    /// The strength exercise the step is for.
+    public var exercise: WorkoutExercise?
+    /// The load of a strength step in kilograms.
+    public var weightKg: Double?
     public init(id: UUID = UUID(), name: String? = nil, intensity: WorkoutIntensity, duration: WorkoutDurationType,
-                target: WorkoutTarget = .none, notes: String? = nil) {
+                target: WorkoutTarget = .none, notes: String? = nil, exercise: WorkoutExercise? = nil,
+                weightKg: Double? = nil) {
         self.id = id; self.name = name; self.intensity = intensity; self.duration = duration
-        self.target = target; self.notes = notes
+        self.target = target; self.notes = notes; self.exercise = exercise; self.weightKg = weightKg
     }
 }
 
@@ -281,9 +432,11 @@ public struct WorkoutPlan: Sendable, Codable, Hashable, Identifiable {
     public var id: UUID
     public var name: String
     public var sport: Sport
+    /// The FIT sub_sport number, such as 20 for strength training. Nil for the sport's default.
+    public var subSport: Int?
     public var steps: [WorkoutStep]
-    public init(id: UUID = UUID(), name: String, sport: Sport, steps: [WorkoutStep]) {
-        self.id = id; self.name = name; self.sport = sport; self.steps = steps
+    public init(id: UUID = UUID(), name: String, sport: Sport, subSport: Int? = nil, steps: [WorkoutStep]) {
+        self.id = id; self.name = name; self.sport = sport; self.subSport = subSport; self.steps = steps
     }
 }
 

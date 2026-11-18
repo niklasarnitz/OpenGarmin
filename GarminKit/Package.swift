@@ -37,6 +37,7 @@ let package = Package(
         .target(name: "GarminHealth", dependencies: ["GarminModels"]),
 
         .testTarget(name: "GarminCoreTests", dependencies: ["GarminCore"]),
+        .testTarget(name: "GarminModelsTests", dependencies: ["GarminModels"]),
         .testTarget(name: "GarminProtocolTests", dependencies: ["GarminProtocol"]),
         .testTarget(name: "GarminFITTests", dependencies: ["GarminFIT"], resources: [.copy("Fixtures")]),
         .testTarget(name: "GarminTransportTests", dependencies: ["GarminTransport"]),
