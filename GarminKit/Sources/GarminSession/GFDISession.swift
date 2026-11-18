@@ -70,6 +70,15 @@ final class GFDISession {
 
     // New sync protocol: the files are listed and pulled as protobuf messages, and their bytes arrive on a file transfer service.
     private var listing = false
+    /// The second listing pass of a connection: recent health files, including ones another app (Garmin Connect)
+    /// already marked synced, which the first pass excludes.
+    private var listingRecent = false
+    private var recentPassDone = false
+    /// Whether the watch accepts `included_data_types`; the Venu 4 answers FAIL_INVALID_DATA_TYPE to plain names.
+    private var recentTypeFilter = true
+    private var recentPages = 0
+    static let maxRecentPages = 30
+    static let recentWindow: TimeInterval = 7 * 86_400
     private var nextTransactionID: UInt32?
     private var pendingItems: [Item] = []
     private var currentItem: Item?
@@ -451,31 +460,93 @@ final class GFDISession {
     private func sendFileList(sessionID: UInt32? = nil) async {
         let synced = Self.syncedUUID()
         var request = GDI_Proto_FileAccess_ItemListRequest()
-        request.excludeAllFlags = [synced]
         request.getFlags = [synced]
+        if listingRecent {
+            // Every health file regardless of its synced flag, with its modified time. The watch filters by type when
+            // it can; otherwise the phone does (see addItem).
+            if recentTypeFilter {
+                request.includedDataTypes = Self.pulledTypes.sorted().map { name in
+                    GDI_Proto_FileAccess_DataType.with { $0.format = .gdxmlDataType; $0.gdxmlString = name }
+                }
+            }
+            request.requestedMetadata = [.modifiedTime]
+        } else {
+            request.excludeAllFlags = [synced]
+        }
         if let sessionID {
             request.sessionID = sessionID
-        } else if let nextTransactionID {
+        } else if !listingRecent, let nextTransactionID {
             request.transactionID = nextTransactionID
         }
         var service = GDI_Proto_FileAccess_Service()
         service.itemListRequest = request
+        SyncDiagnostics.log("list request session=\(sessionID.map(String.init) ?? "nil") transaction=\(request.hasTransactionID ? String(request.transactionID) : "nil")")
         try? await sendProtobufRequest(Self.fileAccess(service))
     }
 
     /// Queues the FIT files of a page. Other file types are not pulled, so they are never marked as synced.
     private func addItem(_ item: Item) {
-        guard item.dataType.hasGdxmlString, item.dataType.gdxmlString.hasPrefix("FIT_TYPE_") else { return }
+        guard let name = typeName(of: item) else { return }
+        guard Self.pulledTypes.contains(name) else { return }
+        if listingRecent {
+            guard !pendingItems.contains(where: { $0.uid == item.uid }) else { return }
+            guard let modified = Self.modifiedDate(item), modified > .now.addingTimeInterval(-Self.recentWindow) else { return }
+        }
+        // As Gadgetbridge: the pulled item carries its resolved type name.
+        var item = item
+        item.dataType = GDI_Proto_FileAccess_DataType.with { $0.gdxmlString = name }
         pendingItems.append(item)
         syncTotal += 1
     }
 
+    /// The item's type name. Only the first item of a type carries the name; the others carry just its key, which
+    /// this resolves through the names seen so far on this connection (Gadgetbridge's nameMap).
+    private func typeName(of item: Item) -> String? {
+        guard item.hasDataType else { return nil }
+        let type = item.dataType
+        if type.hasGdxmlString, !type.gdxmlString.isEmpty {
+            if type.hasGdxmlStringKey { typeNames[type.gdxmlStringKey] = type.gdxmlString }
+            return type.gdxmlString
+        }
+        return type.hasGdxmlStringKey ? typeNames[type.gdxmlStringKey] : nil
+    }
+
+    private var typeNames: [UInt32: String] = [:]
+
+    /// The item's modified time. The watch's unit is not documented: values past 2017 as Unix seconds are read as
+    /// Unix time, smaller ones as Garmin-epoch seconds.
+    private static func modifiedDate(_ item: Item) -> Date? {
+        guard item.hasModifiedTime else { return nil }
+        let value = item.modifiedTime
+        return value > 1_500_000_000 ? Date(timeIntervalSince1970: TimeInterval(value)) : GarminTime.date(fromGarmin: value)
+    }
+
+    /// The FIT files Gadgetbridge pulls (FileType.FILETYPE with `pull`): activities, monitoring, sleep, metrics, HRV
+    /// and the like. Device, settings, sport, workout and course files stay on the watch and are not marked synced.
+    static let pulledTypes: Set<String> = Set([
+        4, 9, 15, 28, 32, 35, 38, 41, 44, 49, 52, 57, 58, 61, 66, 68, 70, 71, 72, 73, 74, 77, 79, 82,
+    ].map { "FIT_TYPE_\($0)" })
+
     private func receiveItemList(_ response: GDI_Proto_FileAccess_ItemListResponse) async {
+        SyncDiagnostics.log("list status=\(response.status) items=\(response.items.count) session=\(response.hasSessionID ? String(response.sessionID) : "nil") next=\(response.hasNextTransactionID ? String(response.nextTransactionID) : "nil")")
         for item in response.items { addItem(item) }
-        if response.hasNextTransactionID { nextTransactionID = response.nextTransactionID }
-        if response.hasSessionID {
+        if !listingRecent, response.hasNextTransactionID { nextTransactionID = response.nextTransactionID }
+        if listingRecent {
+            recentPages += 1
+            if response.status == .failInvalidDataType, recentTypeFilter {
+                recentTypeFilter = false
+                await sendFileList()
+                return
+            }
+        }
+        if response.hasSessionID, !(listingRecent && recentPages >= Self.maxRecentPages) {
             await sendFileList(sessionID: response.sessionID)
+        } else if !recentPassDone {
+            recentPassDone = true
+            listingRecent = true
+            await sendFileList()
         } else {
+            listingRecent = false
             listing = false
             await processNextItem()
         }

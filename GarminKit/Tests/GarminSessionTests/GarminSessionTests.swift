@@ -418,6 +418,37 @@ private func protobufResponse(_ smart: GarminVivomovehr_Smart) -> GFDIFrame {
                                                          data: bytes)).frame()
 }
 
+/// Reassembles the phone's protobuf requests as the watch does, so a request larger than one frame is read whole.
+@MainActor
+private final class ProtobufRequests {
+    private var reassembler = GFDIProtobufReassembler()
+
+    /// The request this frame completes, if it is a protobuf request and the last chunk of one.
+    func smart(_ frame: GFDIFrame) -> GarminVivomovehr_Smart? {
+        guard frame.messageType == GFDIMessageID.protobufRequest.rawValue,
+              let request = try? GFDIProtobufRequest(frame: frame),
+              let data = try? reassembler.accept(request.chunk) else { return nil }
+        return try? GarminVivomovehr_Smart(serializedBytes: data)
+    }
+
+    /// Every whole request the link sent, in order.
+    static func sent(_ link: FakeLink) -> [GarminVivomovehr_Smart] {
+        let requests = ProtobufRequests()
+        return link.framesSent(of: .protobufRequest).compactMap { requests.smart($0) }
+    }
+}
+
+/// The second listing pass: recent health files of Gadgetbridge's pulled types, synced or not.
+private func recentListRequest() -> GarminVivomovehr_Smart {
+    let synced = GDI_Proto_DataTypes_UUID.with { $0.mostSignificant = 42405; $0.leastSignificant = 42405 }
+    var request = GDI_Proto_FileAccess_ItemListRequest()
+    request.getFlags = [synced]
+    request.includedDataTypes = [4, 9, 15, 28, 32, 35, 38, 41, 44, 49, 52, 57, 58, 61, 66, 68, 70, 71, 72, 73, 74, 77, 79, 82]
+        .map { "FIT_TYPE_\($0)" }.sorted().map { name in GDI_Proto_FileAccess_DataType.with { $0.format = .gdxmlDataType; $0.gdxmlString = name } }
+    request.requestedMetadata = [.modifiedTime]
+    return GarminVivomovehr_Smart.with { $0.fileAccessService.itemListRequest = request }
+}
+
 @MainActor
 @Test func newSyncListsPullsAndMarksFITFilesSynced() async throws {
     let store = try makeStore()
@@ -435,11 +466,9 @@ private func protobufResponse(_ smart: GarminVivomovehr_Smart) -> GFDIFrame {
 
     // The watch lists one FIT file, names transfer handle 5 when it is pulled, and sends the file on that handle.
     link.transferPayloads = [Data([0, 0, 0]), zlibStored(fit)]
+    let requests = ProtobufRequests()
     link.reply = { frame in
-        guard frame.messageType == GFDIMessageID.protobufRequest.rawValue,
-              let request = try? GFDIProtobufRequest(frame: frame),
-              let smart = try? GarminVivomovehr_Smart(serializedBytes: request.chunk.data),
-              smart.hasFileAccessService else { return [] }
+        guard let smart = requests.smart(frame), smart.hasFileAccessService else { return [] }
         var list = GDI_Proto_FileAccess_ItemListResponse()
         list.status = .success
         list.items = [item]
@@ -492,16 +521,14 @@ private func protobufResponse(_ smart: GarminVivomovehr_Smart) -> GFDIFrame {
     pullService.pullItemRequest = pullRequest
     var modifyService = GDI_Proto_FileAccess_Service()
     modifyService.modifyFlagsRequest = modify
-    let expected = [listService, pullService, modifyService].map { service -> GarminVivomovehr_Smart in
+    var expected = [listService, pullService, modifyService].map { service -> GarminVivomovehr_Smart in
         var smart = GarminVivomovehr_Smart()
         smart.fileAccessService = service
         return smart
     }
-    let sent = try link.framesSent(of: .protobufRequest).map { frame -> GarminVivomovehr_Smart in
-        let request = try GFDIProtobufRequest(frame: frame)
-        return try GarminVivomovehr_Smart(serializedBytes: request.chunk.data)
-    }
-    #expect(sent == expected)
+    // The recent pass follows the first list; its items carry no modified time here, so it adds nothing.
+    expected.insert(recentListRequest(), at: 1)
+    #expect(ProtobufRequests.sent(link) == expected)
 
     // The file is read from transfer handle 5 with the phone's request, and it is not downloaded the legacy way.
     #expect(link.transfers.map(\.requests) == [[Data([0, 0, 5, 0, 0, 0])]])
@@ -595,4 +622,66 @@ private extension Array where Element == GFDISessionOutput {
             return false
         }.count
     }
+}
+
+/// As a Venu 4 lists files: only the first item of a type names it, later ones carry only its key, and files
+/// Gadgetbridge does not pull (here settings, FIT_TYPE_2) are listed alongside.
+@MainActor
+@Test func newSyncResolvesTypeKeysAndPullsOnlyGadgetbridgesTypes() async throws {
+    let store = try makeStore()
+    let link = FakeLink()
+    func item(_ least: UInt64, name: String?, key: UInt32) -> GDI_Proto_FileAccess_ItemReference {
+        var item = GDI_Proto_FileAccess_ItemReference()
+        item.uid = GDI_Proto_DataTypes_UUID.with { $0.mostSignificant = 7; $0.leastSignificant = least }
+        item.dataType = GDI_Proto_FileAccess_DataType.with {
+            if let name { $0.gdxmlString = name }
+            $0.gdxmlStringKey = key
+        }
+        item.dataSize = 100
+        return item
+    }
+    let named = item(1, name: "FIT_TYPE_32", key: 21)
+    let keyOnly = item(2, name: nil, key: 21)
+    let settings = item(3, name: "FIT_TYPE_2", key: 4)
+    let unknownKey = item(4, name: nil, key: 99)
+
+    link.transferPayloads = [Data([0, 0, 0]), zlibStored(activityFIT(ageSeconds: 3600))]
+    let requests = ProtobufRequests()
+    link.reply = { frame in
+        guard let smart = requests.smart(frame), smart.hasFileAccessService else { return [] }
+        var service = GDI_Proto_FileAccess_Service()
+        if smart.fileAccessService.hasItemListRequest {
+            service.itemListResponse = GDI_Proto_FileAccess_ItemListResponse.with {
+                $0.status = .success
+                $0.items = [named, settings, keyOnly, unknownKey]
+            }
+        } else if smart.fileAccessService.hasPullItemRequest {
+            service.pullItemResponse = GDI_Proto_FileAccess_PullItemDataResponse.with {
+                $0.result = .success
+                $0.transport = .multilinkTransportPipe
+                $0.transferHandle = 5
+            }
+        } else {
+            return []
+        }
+        return [protobufResponse(GarminVivomovehr_Smart.with { $0.fileAccessService = service })]
+    }
+
+    var outputs: [GFDISessionOutput] = []
+    let log = ImportLog(store: store)
+    let session = GFDISession(link: link, importer: log.importer, capabilities: [], phoneName: "iPhone",
+                              newSyncProtocol: true, weatherProvider: nil) { outputs.append($0) }
+    let pump = Task { for await frame in link.incomingFrames { await session.receive(frame) } }
+    defer { pump.cancel() }
+
+    await session.requestSync()
+    try await waitUntil { outputs.syncFinishes == 1 }
+
+    let services = ProtobufRequests.sent(link).map(\.fileAccessService)
+    let pulled = services.filter(\.hasPullItemRequest).map(\.pullItemRequest.item)
+    // Both monitoring files are pulled, the key-only one with its resolved name; settings and the unknown key are not.
+    #expect(pulled.map(\.uid.leastSignificant) == [1, 2])
+    #expect(pulled.map(\.dataType.gdxmlString) == ["FIT_TYPE_32", "FIT_TYPE_32"])
+    let marked = services.filter(\.hasModifyFlagsRequest).map(\.modifyFlagsRequest.uid.leastSignificant)
+    #expect(marked == [1, 2])
 }
