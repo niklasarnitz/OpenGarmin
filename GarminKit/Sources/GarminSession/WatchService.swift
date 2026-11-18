@@ -74,4 +74,13 @@ public protocol WatchService: AnyObject, Observable {
     func sendWorkout(_ plan: WorkoutPlan) async throws
     func updateProfile(_ profile: UserProfile) async throws
     func setTime() async throws
+    /// Connect IQ apps the watch lists as installed, as last refreshed.
+    var installedApps: [InstalledApp] { get }
+    func refreshInstalledApps() async throws
+    func deleteInstalledApp(_ app: InstalledApp) async throws
+    /// Installs a Connect IQ .prg file. `progress` reports the upload as a fraction from 0 to 1.
+    func installApp(_ prg: Data, progress: @escaping @MainActor (Double) -> Void) async throws
+    /// Converts a GPX track to a course and uploads it. `progress` reports the upload as a fraction from 0 to 1.
+    func installCourse(gpx: Data, name: String, includeTurns: Bool,
+                       progress: @escaping @MainActor (Double) -> Void) async throws
 }

@@ -12,6 +12,7 @@ enum GFDISessionOutput: Sendable {
     /// The handshake finished: the watch has identified itself and sent its capabilities.
     case ready(DeviceInfo?, Set<GarminCapability>)
     case progress(Double, String)
+    case installedApps([InstalledApp])
     case syncFinished
     case event(WatchEvent)
 }
@@ -97,6 +98,7 @@ final class GFDISession {
         var offset = 0
         var crc: UInt16 = 0
         let continuation: CheckedContinuation<Void, Error>
+        var onProgress: (@MainActor (Double) -> Void)?
     }
 
     /// - Parameter newSyncProtocol: whether the new sync protocol is used. nil decides from the watch's capabilities.
@@ -251,16 +253,18 @@ final class GFDISession {
         try await transferFile(WorkoutFitEncoder.encode(plan), subType: 5)
     }
 
-    /// Uploads a FIT file (data type 128) of the given sub type: workouts are 5, settings are 2.
-    func transferFile(_ data: Data, subType: UInt8) async throws {
+    /// Uploads a file of the given data type and sub type. FIT files are data type 128: workouts are 5, settings are 2,
+    /// courses are 6. Connect IQ apps are data type 255, sub type 17.
+    func transferFile(_ data: Data, subType: UInt8, dataType: UInt8 = 128,
+                      onProgress: (@MainActor (Double) -> Void)? = nil) async throws {
         guard upload == nil else { throw GarminWatchError.busy }
         let id = UUID()
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            upload = Upload(id: id, data: data, continuation: continuation)
+            upload = Upload(id: id, data: data, continuation: continuation, onProgress: onProgress)
             Task {
                 do {
                     try await self.transmit(GFDICreateFile(
-                        fileSize: UInt32(data.count), dataType: 128, subType: subType,
+                        fileSize: UInt32(data.count), dataType: dataType, subType: subType,
                         fileID: UInt64.random(in: .min ... .max)
                     ))
                 } catch {
@@ -609,6 +613,7 @@ final class GFDISession {
     /// Sends the chunk at the watch's offset, or completes the upload once the watch has the whole file.
     private func sendNextUploadChunk() async {
         guard var current = upload else { return }
+        current.onProgress?(Double(current.offset) / Double(max(current.data.count, 1)))
         if current.offset >= current.data.count {
             finishUpload(.success(()))
             await send(GFDISystemEvent(.syncComplete))
@@ -660,12 +665,15 @@ final class GFDISession {
         if smart.hasFileAccessService {
             await receiveFileAccess(smart.fileAccessService, requestID: chunk.requestID)
         }
+        if smart.hasConnectIqInstalledAppsService {
+            receiveInstalledApps(smart.connectIqInstalledAppsService)
+        }
         if let reply = http.reply(to: smart) {
             await sendProtobufResponse(reply, requestID: chunk.requestID)
         }
     }
 
-    private func sendProtobufRequest(_ smart: GarminVivomovehr_Smart) async throws {
+    func sendProtobufRequest(_ smart: GarminVivomovehr_Smart) async throws {
         protobufRequestID &+= 1
         for chunk in try Self.chunks(smart, requestID: protobufRequestID, maxPacketSize: maxPacketSize) {
             try await transmit(GFDIProtobufRequest(chunk: chunk))

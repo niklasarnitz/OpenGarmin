@@ -34,6 +34,7 @@ public final class GarminWatchService: WatchService {
     public private(set) var pairedWatch: PairedWatch?
     public private(set) var battery: BatteryStatus?
     public private(set) var nearby: [NearbyWatch] = []
+    public private(set) var installedApps: [InstalledApp] = []
     /// The retained history: every imported activity and the samples of the last 30 days.
     public private(set) var latest: HealthBatch
     public let events: AsyncStream<WatchEvent>
@@ -125,6 +126,7 @@ public final class GarminWatchService: WatchService {
         activeLink = nil
         setPairedWatch(nil)
         battery = nil
+        installedApps = []
         state = .noWatchPaired
     }
 
@@ -175,6 +177,29 @@ public final class GarminWatchService: WatchService {
     public func setTime() async throws {
         guard let session else { throw GarminWatchError.notConnected }
         try await session.setTime()
+    }
+
+    // MARK: - Install
+
+    public func refreshInstalledApps() async throws {
+        guard let session else { throw GarminWatchError.notConnected }
+        try await session.requestInstalledApps()
+    }
+
+    public func deleteInstalledApp(_ app: InstalledApp) async throws {
+        guard let session else { throw GarminWatchError.notConnected }
+        try await session.deleteInstalledApp(app)
+    }
+
+    public func installApp(_ prg: Data, progress: @escaping @MainActor (Double) -> Void) async throws {
+        guard let session else { throw GarminWatchError.notConnected }
+        try await session.installApp(prg, onProgress: progress)
+    }
+
+    public func installCourse(gpx: Data, name: String, includeTurns: Bool,
+                              progress: @escaping @MainActor (Double) -> Void) async throws {
+        guard let session else { throw GarminWatchError.notConnected }
+        try await session.installCourse(gpx: gpx, name: name, includeTurns: includeTurns, onProgress: progress)
     }
 
     // MARK: - Connection
@@ -285,6 +310,8 @@ public final class GarminWatchService: WatchService {
             }
         case let .progress(fraction, detail):
             state = .syncing(progress: fraction, detail: detail)
+        case let .installedApps(apps):
+            installedApps = apps
         case .syncFinished:
             if var watch = pairedWatch {
                 watch.lastSync = .now
