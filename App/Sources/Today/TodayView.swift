@@ -6,7 +6,8 @@ struct TodayView: View {
 
     private var data: HealthBatch { app.watch.latest }
 
-    private var steps: Double { data.steps.reduce(0) { $0 + $1.value } }
+    // The watch history covers 30 days, so the day's totals only count today's samples.
+    private var steps: Double { data.steps.filter { Calendar.current.isDateInToday($0.start) }.reduce(0) { $0 + $1.value } }
     private var sleep: SleepSession? { data.sleep.max { $0.end < $1.end } }
     private var heartRateNow: Int? { data.heartRate.max { $0.date < $1.date }?.bpm }
 
@@ -94,7 +95,7 @@ struct TodayView: View {
                 .buttonStyle(.plain)
             }
             cell("Energy", symbol: "flame.fill", tint: Palette.blaze,
-                 value: Formatting.whole(data.activeEnergyKcal.reduce(0) { $0 + $1.value }),
+                 value: Formatting.whole(data.activeEnergyKcal.filter { Calendar.current.isDateInToday($0.start) }.reduce(0) { $0 + $1.value }),
                  caption: "Active kcal")
             cell("SpO2", symbol: "lungs.fill", tint: Palette.glacier,
                  value: data.spo2.latest.map { "\(Int($0 * 100))%" } ?? "–", caption: "Blood oxygen")

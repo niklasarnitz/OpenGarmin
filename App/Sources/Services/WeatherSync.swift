@@ -1,4 +1,5 @@
 import CoreLocation
+import MapKit
 import WeatherKit
 import GarminModels
 
@@ -8,12 +9,16 @@ enum WeatherSync {
         let weather = try await WeatherKit.WeatherService.shared.weather(for: location)
         let now = weather.currentWeather
         let today = weather.dailyForecast.forecast.first
-        let place = try? await CLGeocoder().reverseGeocodeLocation(location).first
+        var locality: String?
+        if let request = MKReverseGeocodingRequest(location: location),
+           let items = try? await request.mapItems {
+            locality = items.first?.addressRepresentations?.cityName
+        }
         let nowCelsius = now.temperature.converted(to: .celsius).value
 
         return WeatherReport(
             date: now.date,
-            locationName: place?.locality ?? "Current location",
+            locationName: locality ?? "Current location",
             latitude: location.coordinate.latitude,
             longitude: location.coordinate.longitude,
             temperatureCelsius: nowCelsius,

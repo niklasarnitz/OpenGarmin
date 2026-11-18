@@ -19,6 +19,6 @@ enum BackgroundSync {
     static func schedule() {
         let request = BGProcessingTaskRequest(identifier: identifier)
         request.earliestBeginDate = .now.addingTimeInterval(60 * 60)
-        try? BGTaskScheduler.shared.submit(request)
+        Task { try? await BGTaskScheduler.shared.submitTaskRequest(request) }
     }
 }
