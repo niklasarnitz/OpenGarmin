@@ -67,6 +67,8 @@
 	<string>Your location is used to keep weather on your watch current in the background.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Your location is used to send local weather and GPS satellite data to your watch.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

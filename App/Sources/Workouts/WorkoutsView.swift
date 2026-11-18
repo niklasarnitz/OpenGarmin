@@ -4,7 +4,7 @@ import GarminModels
 struct WorkoutsView: View {
     @Environment(AppEnvironment.self) private var app
 
-    @State private var plans = PreviewData.plans
+    @State private var plans = WorkoutLibrary.plans
     @State private var trainingPlans: [TrainingPlan] = []
     @State private var isBuilding = false
     @State private var isPlanning = false
@@ -60,6 +60,7 @@ struct WorkoutsView: View {
             .sheet(isPresented: $isPlanning) {
                 TrainingPlanEditor(workouts: plans) { trainingPlans.append($0) }
             }
+            .onChange(of: plans) { _, new in WorkoutLibrary.plans = new }
             .sensoryFeedback(.success, trigger: sendCount)
             .alert("Couldn't send the workout", isPresented: Binding(
                 get: { sendError != nil },

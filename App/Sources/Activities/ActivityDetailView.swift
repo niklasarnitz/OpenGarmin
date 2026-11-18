@@ -3,7 +3,9 @@ import MapKit
 import GarminModels
 
 struct ActivityDetailView: View {
+    @Environment(AppEnvironment.self) private var app
     let activity: Activity
+    @State private var shareFiles: [URL] = []
 
     private var route: [CLLocationCoordinate2D] {
         activity.records.compactMap { record in
@@ -41,6 +43,28 @@ struct ActivityDetailView: View {
         .background(Color.canvas.ignoresSafeArea())
         .navigationTitle(activity.name ?? activity.sport.title)
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: activity.id) { await prepareShare() }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                ShareLink(items: shareFiles) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+                .disabled(shareFiles.isEmpty)
+            }
+        }
+    }
+
+    /// The GPX track is written at once. The raw FIT file is searched for off the main thread, since it decodes
+    /// every stored file until it finds this activity.
+    private func prepareShare() async {
+        let activity = activity
+        let unitNumber = app.watch.pairedWatch?.info?.unitNumber
+        var files: [URL] = []
+        if let gpx = try? ActivityExport.gpxFile(for: activity) { files.append(gpx) }
+        if let fit = await Task.detached(operation: { ActivityExport.fitFile(for: activity, unitNumber: unitNumber) }).value {
+            files.insert(fit, at: 0)
+        }
+        shareFiles = files
     }
 
     private func series(_ value: (ActivityRecord) -> Double?) -> [PointSample] {
