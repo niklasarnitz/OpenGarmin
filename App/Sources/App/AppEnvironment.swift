@@ -61,6 +61,8 @@ final class AppEnvironment {
                 }
                 guard case let .healthBatchImported(batch) = event else { continue }
                 backend.requestUpload()
+                // Batches that carry nothing for Health (Garmin Connect's daily data) only start the upload.
+                guard !batch.isEmpty else { continue }
                 let paired = watch.pairedWatch
                 _ = try? await writer.save(
                     batch,

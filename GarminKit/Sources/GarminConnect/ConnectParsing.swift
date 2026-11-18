@@ -1,5 +1,6 @@
 import Foundation
 import GarminModels
+import os
 
 /// One row of Garmin's activity list.
 public struct ConnectActivity: Sendable, Equatable {
@@ -9,6 +10,8 @@ public struct ConnectActivity: Sendable, Equatable {
 
 /// Garmin's responses, read into the app's models. Pure, so the tests run on responses shaped like the recorded ones.
 enum ConnectParsing {
+    private static let logger = Logger(subsystem: "com.niklasarnitz.opengarmin", category: "connect")
+
     /// The SSO answer to a login or an MFA code.
     enum SSOStep: Equatable {
         case ticket(String)
@@ -103,7 +106,15 @@ enum ConnectParsing {
               let dto = json["dailySleepDTO"] as? [String: Any],
               let startMs = number(dto["sleepStartTimestampGMT"]), let endMs = number(dto["sleepEndTimestampGMT"]),
               endMs > startMs else { return nil }
-        let intervals = ((json["sleepLevels"] as? [[String: Any]]) ?? []).compactMap { level -> SleepInterval? in
+        let levels = (json["sleepLevels"] as? [[String: Any]]) ?? []
+        // Each raw activityLevel seen and the stage it mapped to, for checking the mapping against the account.
+        let mapping = Set(levels.map { level -> String in
+            let code = number(level["activityLevel"])
+            let stage = code.flatMap(sleepStage).map { "\($0)" } ?? "dropped"
+            return "\(code.map { String(Int($0)) } ?? "nil") -> \(stage)"
+        })
+        logger.debug("Connect sleep \(dto["calendarDate"] as? String ?? "?", privacy: .public): activityLevel \(mapping.sorted().joined(separator: ", "), privacy: .public)")
+        let intervals = levels.compactMap { level -> SleepInterval? in
             guard let start = (level["startGMT"] as? String).flatMap({ gmtDate($0) }),
                   let end = (level["endGMT"] as? String).flatMap({ gmtDate($0) }), end > start,
                   let code = number(level["activityLevel"]), let stage = sleepStage(code) else { return nil }

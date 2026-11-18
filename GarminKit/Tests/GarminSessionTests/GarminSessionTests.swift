@@ -362,6 +362,25 @@ private func serveDownloads(_ files: [UInt16: Data]) -> @MainActor (GFDIFrame) -
 }
 
 @MainActor
+@Test func connectDailyBatchIsKeptInTheHistoryButNotSentToHealth() async throws {
+    let store = try makeStore()
+    let log = ImportLog(store: store)
+    let now = Date.now
+    var batch = HealthBatch()
+    batch.stress = [PointSample(date: now.addingTimeInterval(-3600), value: 30)]
+    batch.steps = [IntervalSample(start: now.addingTimeInterval(-900), end: now, value: 120)]
+    batch.sleep = [SleepSession(start: now.addingTimeInterval(-7200), end: now.addingTimeInterval(-600), intervals: [])]
+
+    try await log.importer.acceptBatch(batch, fileKey: "connect-daily-v2-2026-03-01")
+    try await waitUntil { log.imported.count == 1 }
+
+    // The Health part of a Connect daily batch is empty, so the writer saves nothing; the history keeps the data.
+    #expect(log.imported.first?.isEmpty == true)
+    #expect(log.history.stress == batch.stress)
+    #expect(log.history.steps == batch.steps)
+}
+
+@MainActor
 @Test func inboxFilesLeftByAStoppedAppAreImportedOnRestart() async throws {
     let store = try makeStore()
     // The app stopped after the downloads and before the import ran, so the files are still in the inbox.

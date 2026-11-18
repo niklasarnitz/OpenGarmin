@@ -10,7 +10,8 @@ actor FITImporter {
     enum Event: Sendable {
         /// An import run has started.
         case started
-        /// A batch was merged. `batch` is what was new; `history` is the retained history after it.
+        /// A batch was merged. `batch` is the part of it that goes to Apple Health (see `healthPart`); `history` is the
+        /// retained history after the merge.
         case imported(HealthBatch, history: HealthBatch)
         /// The run ended: the inbox is empty, or its files could not be stored yet and stay there for the next run.
         case finished
@@ -45,7 +46,17 @@ actor FITImporter {
     func acceptBatch(_ batch: HealthBatch, fileKey: String) throws {
         try history.saveBatch(batch, fileKey: fileKey)
         try history.commit([HistoryStore.Entry(key: fileKey, batch: batch)])
-        report(.imported(batch, history: history.history))
+        report(.imported(Self.healthPart(of: fileKey, batch), history: history.history))
+    }
+
+    /// The part of a file's or batch's data that goes to Apple Health. A watch file goes whole. Garmin Connect data goes
+    /// only for its activities: the Connect app already wrote its steps, sleep, heart rate and HRV to Health, and the
+    /// watch's own data covers the rest. Connect data keeps its place in the history and the backend upload.
+    static func healthPart(of fileKey: String, _ batch: HealthBatch) -> HealthBatch {
+        guard fileKey.contains("connect") else { return batch }
+        var part = HealthBatch()
+        part.activities = batch.activities
+        return part
     }
 
     /// Whether the file is imported or waiting in the inbox. Either way it is safe to archive on the watch.
@@ -79,6 +90,7 @@ actor FITImporter {
     private func importBatch(_ files: [(key: String, url: URL)]) -> Bool {
         var entries: [HistoryStore.Entry] = []
         var batch = HealthBatch()
+        var health = HealthBatch()
         for file in files where !history.isImported(file.key) {
             // A file that does not decode is still recorded, so it is not imported again.
             var decoded = HealthBatch()
@@ -89,6 +101,7 @@ actor FITImporter {
                 report(.log("Skipped FIT file \(file.key): \(error)"))
             }
             batch.merge(decoded)
+            health.merge(Self.healthPart(of: file.key, decoded))
             entries.append(HistoryStore.Entry(key: file.key, batch: decoded))
         }
         do {
@@ -99,7 +112,7 @@ actor FITImporter {
             report(.log("Could not store \(files.count) FIT files: \(error)"))
             return false
         }
-        if batch != HealthBatch() { report(.imported(batch, history: history.history)) }
+        if batch != HealthBatch() { report(.imported(health, history: history.history)) }
         return true
     }
 
