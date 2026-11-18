@@ -4,7 +4,10 @@ import GarminModels
 struct TodayView: View {
     @Environment(AppEnvironment.self) private var app
 
-    private var data: HealthBatch { app.watch.latest }
+    /// Apple Health's view of today, which also holds what Garmin Connect or other apps wrote.
+    @State private var health = HealthBatch()
+
+    private var data: HealthBatch { app.watch.latest.fillingGaps(from: health) }
 
     // The watch history covers 30 days, so the day's totals only count today's samples.
     private var steps: Double { data.steps.filter { Calendar.current.isDateInToday($0.start) }.reduce(0) { $0 + $1.value } }
@@ -36,7 +39,12 @@ struct TodayView: View {
             }
             .background(Color.canvas.ignoresSafeArea())
             .navigationTitle("Today")
-            .refreshable { await app.watch.syncNow() }
+            .refreshable {
+                await app.watch.syncNow()
+                health = await HealthStore.today()
+            }
+            // Reloads when a sync imports new watch data, which the app also saved to Health.
+            .task(id: app.watch.latest) { health = await HealthStore.today() }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     WatchStatusPill(state: app.watch.state, battery: app.watch.battery)
