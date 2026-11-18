@@ -1,4 +1,5 @@
 import BackgroundTasks
+import GarminSession
 
 /// Periodic sync while iOS lets the app run in the background.
 enum BackgroundSync {
@@ -11,6 +12,7 @@ enum BackgroundSync {
             Task { @MainActor in
                 schedule()
                 await environment.watch.syncNow()
+                await (environment.watch as? GarminWatchService)?.agps.refresh()
                 task.setTaskCompleted(success: true)
             }
         }

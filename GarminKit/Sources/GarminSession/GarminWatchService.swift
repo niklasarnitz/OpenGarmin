@@ -25,6 +25,8 @@ public final class GarminWatchService: WatchService {
     /// The retained history: every imported activity and the samples of the last 30 days.
     public private(set) var latest: HealthBatch
     public let events: AsyncStream<WatchEvent>
+    /// The GPS satellite data the watch takes from the phone: its URLs, cached files and refresh.
+    public let agps: AGPSCache
 
     @ObservationIgnored private let eventSink: AsyncStream<WatchEvent>.Continuation
     @ObservationIgnored private let store: SessionStore
@@ -54,6 +56,7 @@ public final class GarminWatchService: WatchService {
         events = stream
         eventSink = sink
         self.store = store
+        agps = AGPSCache(directory: store.directory.appendingPathComponent("AGPS", isDirectory: true))
         self.phoneName = phoneName
         weatherProvider = weather
         calendarProvider = calendar
@@ -209,7 +212,8 @@ public final class GarminWatchService: WatchService {
         // (nil) decide from the watch's capabilities instead.
         let newSync = GarminDeviceCatalog.all.first(where: { $0.id == pairedWatch?.catalogID })?.usesNewSyncProtocol
         return GFDISession(link: link, store: store, capabilities: GFDISession.phoneCapabilities,
-                           phoneName: phoneName, newSyncProtocol: newSync, weatherProvider: weatherProvider) { [weak self] output in
+                           phoneName: phoneName, newSyncProtocol: newSync, weatherProvider: weatherProvider,
+                           agps: agps) { [weak self] output in
             guard let self, current == self.generation else { return }
             self.handle(output)
         }
