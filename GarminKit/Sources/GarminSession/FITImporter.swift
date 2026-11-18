@@ -40,8 +40,10 @@ actor FITImporter {
         start()
     }
 
-    /// Merges a batch that has no FIT file into the history at once, as one import under `fileKey`.
+    /// Merges a batch that has no FIT file into the history at once, as one import under `fileKey`. The batch is also
+    /// kept in `Batches/` for the backend upload.
     func acceptBatch(_ batch: HealthBatch, fileKey: String) throws {
+        try history.saveBatch(batch, fileKey: fileKey)
         try history.commit([HistoryStore.Entry(key: fileKey, batch: batch)])
         report(.imported(batch, history: history.history))
     }

@@ -357,6 +357,8 @@ private func serveDownloads(_ files: [UInt16: Data]) -> @MainActor (GFDIFrame) -
     #expect(log.history.bodyBattery == batch.bodyBattery)
     #expect(await log.importer.isKnown("connect-daily-1"))
     #expect(await log.importer.snapshotWrites == 1)
+    let kept = try JSONDecoder().decode(HealthBatch.self, from: Data(contentsOf: store.directory.appending(path: "Batches/connect-daily-1.json")))
+    #expect(kept == batch)
 }
 
 @MainActor
