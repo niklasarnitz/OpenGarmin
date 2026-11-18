@@ -87,11 +87,11 @@ struct InsightsView: View {
         VStack(spacing: 16) {
             MetricTile("Stress", symbol: "bolt.heart.fill", tint: Palette.amber) {
                 MetricFigure(value: data.stress.latest.map { Formatting.whole($0) } ?? "–", unit: "/ 100")
-                SeriesChart(points: data.stress.filter { interval.contains($0.date) }, tint: Palette.amber, label: "Stress", height: 130)
+                SeriesChart(points: data.stress.filter { interval.contains($0.date) }, tint: Palette.amber, label: "Stress", height: 130, zeroMeansNoData: true)
             }
             MetricTile("Body battery", symbol: "battery.75percent", tint: Palette.lichen) {
                 MetricFigure(value: data.bodyBattery.latest.map { Formatting.whole($0) } ?? "–", unit: "/ 100")
-                SeriesChart(points: data.bodyBattery.filter { interval.contains($0.date) }, tint: Palette.lichen, label: "Body battery", height: 130)
+                SeriesChart(points: data.bodyBattery.filter { interval.contains($0.date) }, tint: Palette.lichen, label: "Body battery", height: 130, zeroMeansNoData: true)
             }
         }
     }
@@ -135,11 +135,24 @@ struct InsightsView: View {
 
     private func dailyChart(_ title: String, symbol: String, tint: Color, unit: String,
                             value: @escaping (DayInsight) -> Double?) -> some View {
-        let points = trend.compactMap { day in value(day).map { PointSample(date: day.day, value: $0) } }
+        let points = trend.compactMap { day in value(day).flatMap { $0 > 0 ? PointSample(date: day.day, value: $0) : nil } }
+        // Days of the range without a value (or with 0, Garmin's "not measured") are greyed.
+        let calendar = Calendar.current
+        let measured = Set(points.map { calendar.startOfDay(for: $0.date) })
+        let missing = rangeDays <= 62
+            ? stride(from: 0, to: rangeDays, by: 1).compactMap { offset -> Date? in
+                let day = calendar.date(byAdding: .day, value: offset, to: interval.start)!
+                return day <= .now && !measured.contains(day) ? day : nil
+            }
+            : []
         return MetricTile(LocalizedStringKey(title), symbol: symbol, tint: tint) {
             MetricFigure(value: points.latest.map { Formatting.whole($0) } ?? "–", unit: unit, size: 34)
             Chart {
                 // Up to two months each day is a bar; longer ranges draw the 7-day mean as a line.
+                ForEach(missing, id: \.self) { day in
+                    RectangleMark(x: .value("Day", day, unit: .day))
+                        .foregroundStyle(Color.secondary.opacity(0.14))
+                }
                 if rangeDays <= 62 {
                     ForEach(points, id: \.date) { point in
                         BarMark(x: .value("Day", point.date, unit: .day), y: .value(title, point.value))

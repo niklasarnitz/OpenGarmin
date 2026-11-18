@@ -1261,6 +1261,16 @@
         }
       }
     },
+    "No data" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Daten"
+          }
+        }
+      }
+    },
     "No data yet" : {
       "localizations" : {
         "de" : {

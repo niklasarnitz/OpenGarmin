@@ -74,3 +74,38 @@ public enum ChartSmoothing {
         }
     }
 }
+
+/// Where a series has no data. Garmin writes 0 for stress, Body Battery and heart rate when the watch could not
+/// measure (off the wrist, too much movement), so those zeros are gaps, not readings.
+public enum ChartGaps {
+    /// The runs of readings between gaps, and the gaps themselves. A gap is a run of readings `isMissing` marks, and
+    /// spans from the last reading before it to the first one after it (or to its own end at the edge of the series),
+    /// so the greyed range meets the line on both sides.
+    public static func split(_ points: [PointSample], isMissing: (PointSample) -> Bool = { $0.value <= 0 })
+        -> (segments: [[PointSample]], gaps: [DateInterval]) {
+        let sorted = points.sorted { $0.date < $1.date }
+        var segments: [[PointSample]] = []
+        var gaps: [DateInterval] = []
+        var current: [PointSample] = []
+        var gapStart: Date?
+        var gapEnd: Date?
+        for point in sorted {
+            if isMissing(point) {
+                if gapStart == nil {
+                    if !current.isEmpty { segments.append(current); current = [] }
+                    gapStart = segments.last?.last?.date ?? point.date
+                }
+                gapEnd = point.date
+            } else {
+                if let start = gapStart {
+                    gaps.append(DateInterval(start: start, end: point.date))
+                    gapStart = nil
+                }
+                current.append(point)
+            }
+        }
+        if let start = gapStart, let end = gapEnd { gaps.append(DateInterval(start: start, end: end)) }
+        if !current.isEmpty { segments.append(current) }
+        return (segments, gaps)
+    }
+}

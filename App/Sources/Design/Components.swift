@@ -142,6 +142,9 @@ struct SeriesChart: View {
     let label: String
     var height: CGFloat = 120
     var showsAxis = true
+    /// Garmin writes 0 when it could not measure (stress, Body Battery, heart rate). Those stretches are drawn as
+    /// greyed "no data" ranges and the line breaks there. Off for series where 0 is a real value, such as speed.
+    var zeroMeansNoData = false
 
     var body: some View {
         if points.isEmpty {
@@ -154,25 +157,69 @@ struct SeriesChart: View {
         }
     }
 
-    /// Readings averaged into buckets once the chart spans more than a day and a half, so multi-day stress or
-    /// Body Battery draws as a trend instead of noise.
-    private var shown: [PointSample] { ChartSmoothing.smoothed(points) }
+    private var span: TimeInterval {
+        guard let first = points.map(\.date).min(), let last = points.map(\.date).max() else { return 0 }
+        return last.timeIntervalSince(first)
+    }
 
-    private var spansDays: Bool {
-        guard let first = points.first?.date, let last = points.last?.date else { return false }
-        return abs(last.timeIntervalSince(first)) > 36 * 3600
+    private var spansDays: Bool { span > 36 * 3600 }
+
+    /// The line's pieces and the greyed ranges between them. Gaps shorter than ten minutes, or than one smoothing
+    /// bucket on multi-day charts, are left out so single dropped readings do not hatch the chart.
+    private var layout: (segments: [[PointSample]], gaps: [DateInterval]) {
+        guard zeroMeansNoData else { return ([ChartSmoothing.smoothed(points)], []) }
+        let split = ChartGaps.split(points)
+        let shortest = max(600, ChartSmoothing.bucketWidth(forSpan: span) ?? 0)
+        let gaps = split.gaps.filter { $0.duration >= shortest }
+        // Readings on both sides of a dropped short gap rejoin one piece, so smoothing runs across it.
+        var segments: [[PointSample]] = []
+        for point in split.segments.joined() {
+            if let last = segments.last?.last, gaps.contains(where: { $0.start >= last.date && $0.end <= point.date }) {
+                segments.append([point])
+            } else if segments.isEmpty {
+                segments.append([point])
+            } else {
+                segments[segments.count - 1].append(point)
+            }
+        }
+        return (segments.map(ChartSmoothing.smoothed), gaps)
     }
 
     private var chart: some View {
-        Chart(shown, id: \.date) { point in
-            AreaMark(x: .value("Time", point.date), y: .value(label, point.value))
-                .foregroundStyle(LinearGradient(colors: [tint.opacity(0.32), tint.opacity(0)],
-                                                startPoint: .top, endPoint: .bottom))
-                .interpolationMethod(.monotone)
-            LineMark(x: .value("Time", point.date), y: .value(label, point.value))
-                .foregroundStyle(tint)
-                .lineStyle(StrokeStyle(lineWidth: 2.2, lineCap: .round))
-                .interpolationMethod(.monotone)
+        let layout = layout
+        return Chart {
+            ForEach(layout.gaps.indices, id: \.self) { index in
+                let gap = layout.gaps[index]
+                RectangleMark(xStart: .value("Gap start", gap.start), xEnd: .value("Gap end", gap.end))
+                    .foregroundStyle(Color.secondary.opacity(0.14))
+                    .annotation(position: .overlay, alignment: .center) {
+                        // Only wide gaps have room for the label.
+                        if span > 0, gap.duration / span > 0.12 {
+                            Text("No data")
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+            }
+            ForEach(layout.segments.indices, id: \.self) { segment in
+                ForEach(layout.segments[segment], id: \.date) { point in
+                    AreaMark(x: .value("Time", point.date), y: .value(label, point.value),
+                             series: .value("Segment", segment))
+                        .foregroundStyle(LinearGradient(colors: [tint.opacity(0.32), tint.opacity(0)],
+                                                        startPoint: .top, endPoint: .bottom))
+                        .interpolationMethod(.monotone)
+                    LineMark(x: .value("Time", point.date), y: .value(label, point.value),
+                             series: .value("Segment", segment))
+                        .foregroundStyle(tint)
+                        .lineStyle(StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                        .interpolationMethod(.monotone)
+                    if layout.segments[segment].count == 1 {
+                        PointMark(x: .value("Time", point.date), y: .value(label, point.value))
+                            .foregroundStyle(tint)
+                            .symbolSize(20)
+                    }
+                }
+            }
         }
         .chartYScale(domain: .automatic(includesZero: false))
         .chartXAxis {

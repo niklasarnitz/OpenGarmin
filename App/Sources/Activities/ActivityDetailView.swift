@@ -22,7 +22,7 @@ struct ActivityDetailView: View {
                 if activity.records.contains(where: { $0.heartRate != nil }) {
                     MetricTile("Heart rate", symbol: "heart.fill", tint: Palette.ember) {
                         SeriesChart(points: series { $0.heartRate.map(Double.init) },
-                                    tint: Palette.ember, label: "bpm", height: 150)
+                                    tint: Palette.ember, label: "bpm", height: 150, zeroMeansNoData: true)
                     }
                 }
                 if activity.records.contains(where: { $0.speed != nil }) {

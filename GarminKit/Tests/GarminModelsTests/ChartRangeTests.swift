@@ -55,3 +55,23 @@ private func day(_ y: Int, _ m: Int, _ d: Int, _ h: Int = 0) -> Date {
     // 9 March: the 7-day window starts on 3 March, so only its own value counts.
     #expect(ChartSmoothing.rollingMean(points, days: 7, calendar: berlin).map(\.value) == [10, 15, 60])
 }
+
+@Test func zerosSplitTheSeriesIntoSegmentsAndGreyGaps() {
+    let t = { (minutes: Double) in Date(timeIntervalSinceReferenceDate: minutes * 60) }
+    let values: [Double] = [30, 40, 0, 0, 50, 0]
+    // Given out of order, to check the split sorts by time.
+    let points = values.enumerated().map { PointSample(date: t(Double($0.offset)), value: $0.element) }.reversed()
+    let (segments, gaps) = ChartGaps.split(Array(points))
+    #expect(segments.map { $0.map(\.value) } == [[30, 40], [50]])
+    // The inner gap runs from the last reading before it (minute 1) to the first after it (minute 4); the trailing
+    // zero at minute 5 is a gap from minute 4 to itself.
+    #expect(gaps == [DateInterval(start: t(1), end: t(4)), DateInterval(start: t(4), end: t(5))])
+}
+
+@Test func seriesThatStartsWithZerosGreysFromItsFirstReading() {
+    let t = { (minutes: Double) in Date(timeIntervalSinceReferenceDate: minutes * 60) }
+    let (segments, gaps) = ChartGaps.split([PointSample(date: t(0), value: 0), PointSample(date: t(2), value: 0),
+                                            PointSample(date: t(3), value: 20)])
+    #expect(segments.map { $0.map(\.value) } == [[20]])
+    #expect(gaps == [DateInterval(start: t(0), end: t(3))])
+}
