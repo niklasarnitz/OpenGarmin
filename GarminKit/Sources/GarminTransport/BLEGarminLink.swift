@@ -11,7 +11,7 @@ public enum GarminLinkError: Error, Equatable {
 /// CoreBluetooth `GarminLink` for one watch. Uses multi-link reliable framing (V2) when the watch exposes its
 /// MLR characteristics, and plain COBS over V1 or V0 otherwise.
 @MainActor
-public final class BLEGarminLink: NSObject, GarminLink {
+public final class BLEGarminLink: NSObject, GarminServiceLink {
     public nonisolated let states: AsyncStream<LinkState>
     public nonisolated let incomingFrames: AsyncStream<Data>
     private let stateSink: AsyncStream<LinkState>.Continuation
@@ -30,7 +30,14 @@ public final class BLEGarminLink: NSObject, GarminLink {
     private var handshake = GFDIHandshake()
     private var lastHandshakeWrite: Data?
     private var pairingAttempts = 0
-    private var channel: MLRChannel?
+    /// MLR channels by handle: the GFDI channel and each open file transfer service.
+    private var channels: [UInt8: MLRChannel] = [:]
+    private var gfdiHandle: UInt8?
+    /// Payload sinks of the open file transfer services, by handle.
+    private var serviceSinks: [UInt8: AsyncStream<Data>.Continuation] = [:]
+    /// Service codes in use, and the registrations still waiting for the watch's reply.
+    private var openServices: Set<UInt16> = []
+    private var openRequests: [UInt16: CheckedContinuation<UInt8, Error>] = [:]
     private var decoder = CobsDecoder()
 
     private var connectContinuation: CheckedContinuation<Void, Error>?
@@ -50,6 +57,9 @@ public final class BLEGarminLink: NSObject, GarminLink {
         tx: CBUUID(string: "DF334C80-E6A7-D082-274D-78FC66F85E16"),
         rx: CBUUID(string: "4ACBCD28-7425-868E-F447-915C8F00D0CB")
     )
+
+    /// The file transfer services Gadgetbridge rotates through (FILE_TRANSFER_2 ... FILE_TRANSFER_E).
+    private static let fileTransferServices: [UInt16] = [0x2018, 0x4018, 0x6018, 0xa018, 0xc018, 0xe018]
 
     public init(peripheralID: UUID) {
         self.peripheralID = peripheralID
@@ -97,10 +107,8 @@ public final class BLEGarminLink: NSObject, GarminLink {
     public func send(_ gfdiFrame: Data) async throws {
         guard case .ready = state else { throw GarminLinkError.notReady }
         let encoded = Cobs.encode(gfdiFrame)
-        if var mlr = channel {
-            let packets = mlr.send(encoded)
-            channel = mlr
-            for packet in packets { write(packet) }
+        if let handle = gfdiHandle {
+            for packet in queue(encoded, on: handle) { write(packet) }
             scheduleRetransmit()
         } else {
             // V1 and V0 have no packet header, so the whole write is payload.
@@ -116,7 +124,14 @@ public final class BLEGarminLink: NSObject, GarminLink {
         watchdog = nil
         retransmitTask?.cancel()
         retransmitTask = nil
-        channel = nil
+        channels = [:]
+        gfdiHandle = nil
+        serviceSinks.values.forEach { $0.finish() }
+        serviceSinks = [:]
+        openServices = []
+        let waiting = Array(openRequests.values)
+        openRequests = [:]
+        waiting.forEach { $0.resume(throwing: GarminLinkError.notReady) }
         outbox = []
         decoder = CobsDecoder()
         handshake = GFDIHandshake()
@@ -201,24 +216,55 @@ public final class BLEGarminLink: NSObject, GarminLink {
             return
         }
         if data.first == 0 {
-            if let next = handshake.receive(data) { writeHandshake(next) }
-            switch handshake.step {
-            case let .open(handle) where channel == nil:
-                channel = MLRChannel(handle: handle, maxWrite: maxWrite)
-                setReady(protocolVersion: 2)
-            case let .refused(status):
-                fail("watch refused the GFDI channel (status \(status))")
-            default:
-                break
-            }
+            control(data)
             return
         }
-        guard var mlr = channel else { return }
+        guard let first = data.first else { return }
+        let handle = (first >> 4) & 0x07
+        guard var mlr = channels[handle] else { return }
         let received = mlr.receive(data)
-        channel = mlr
+        channels[handle] = mlr
         for packet in received.outgoing { write(packet) }
-        for message in received.messages { deliver(decoder.feed(message)) }
+        for message in received.messages {
+            if handle == gfdiHandle {
+                deliver(decoder.feed(message))
+            } else {
+                serviceSinks[handle]?.yield(message)
+            }
+        }
         scheduleRetransmit()
+    }
+
+    /// Replies on handle 0: the GFDI handshake, and the file transfer services the watch opens or closes.
+    private func control(_ data: Data) {
+        if let next = handshake.receive(data) { writeHandshake(next) }
+        switch handshake.step {
+        case let .open(handle) where gfdiHandle == nil:
+            gfdiHandle = handle
+            channels[handle] = MLRChannel(handle: handle, maxWrite: maxWrite)
+            setReady(protocolVersion: 2)
+        case let .refused(status):
+            fail("watch refused the GFDI channel (status \(status))")
+        default:
+            break
+        }
+        switch MLRControl.decode(data) {
+        case let .register(service, status, handle)? where service != MLRControl.gfdiService:
+            guard let waiting = openRequests.removeValue(forKey: service) else { return }
+            if status == 0 {
+                channels[handle] = MLRChannel(handle: handle, maxWrite: maxWrite)
+                waiting.resume(returning: handle)
+            } else {
+                openServices.remove(service)
+                waiting.resume(throwing: GarminLinkError.failed("watch refused the file transfer (status \(status))"))
+            }
+        case let .closeHandle(service, handle)? where handle != gfdiHandle:
+            channels[handle] = nil
+            openServices.remove(service)
+            serviceSinks.removeValue(forKey: handle)?.finish()
+        default:
+            break
+        }
     }
 
     private func deliver(_ frames: [Data]) {
@@ -240,17 +286,50 @@ public final class BLEGarminLink: NSObject, GarminLink {
         }
     }
 
+    /// Queues a message on an MLR handle and returns the packets that fit its window now.
+    private func queue(_ message: Data, on handle: UInt8) -> [Data] {
+        guard var mlr = channels[handle] else { return [] }
+        let packets = mlr.send(message)
+        channels[handle] = mlr
+        return packets
+    }
+
+    /// Sends a raw payload on a file transfer service. Service payloads are not COBS-framed.
+    func sendService(_ payload: Data, on handle: UInt8) {
+        for packet in queue(payload, on: handle) { write(packet) }
+        scheduleRetransmit()
+    }
+
     /// Resends unacknowledged MLR packets once a second until the watch has acknowledged everything.
     private func scheduleRetransmit() {
-        guard retransmitTask == nil, (channel?.unacknowledgedCount ?? 0) > 0 else { return }
+        guard retransmitTask == nil, channels.values.contains(where: { $0.unacknowledgedCount > 0 }) else { return }
         retransmitTask = Task { [weak self] in
             while true {
                 guard (try? await Task.sleep(for: .seconds(1))) != nil,
-                      let self, let channel = self.channel, channel.unacknowledgedCount > 0 else { break }
-                for packet in channel.retransmit() { self.write(packet) }
+                      let self, self.channels.values.contains(where: { $0.unacknowledgedCount > 0 }) else { break }
+                for channel in self.channels.values {
+                    for packet in channel.retransmit() { self.write(packet) }
+                }
             }
             self?.retransmitTask = nil
         }
+    }
+
+    // MARK: - File transfer services
+
+    public func openFileTransfer() async throws -> any GarminServiceChannel {
+        guard case .ready = state else { throw GarminLinkError.notReady }
+        guard let code = Self.fileTransferServices.first(where: { !openServices.contains($0) }) else {
+            throw GarminLinkError.failed("no file transfer service is free")
+        }
+        openServices.insert(code)
+        let handle: UInt8 = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<UInt8, Error>) in
+            openRequests[code] = continuation
+            write(MLRControl.registerRequest(service: code, reliable: true))
+        }
+        let (stream, sink) = AsyncStream.makeStream(of: Data.self)
+        serviceSinks[handle] = sink
+        return BLEServiceChannel(link: self, handle: handle, incoming: stream)
     }
 
     // MARK: - Called by GarminCentral
@@ -270,6 +349,26 @@ public final class BLEGarminLink: NSObject, GarminLink {
         } else {
             fail("link dropped during connect: \(error?.localizedDescription ?? "unknown error")")
         }
+    }
+}
+
+/// One file transfer service on a BLE link. Payloads go to the watch on its handle, and `incoming` finishes when the
+/// watch closes the handle or the link ends.
+@MainActor
+public final class BLEServiceChannel: GarminServiceChannel {
+    public nonisolated let incoming: AsyncStream<Data>
+    private weak var link: BLEGarminLink?
+    private let handle: UInt8
+
+    fileprivate init(link: BLEGarminLink, handle: UInt8, incoming: AsyncStream<Data>) {
+        self.link = link
+        self.handle = handle
+        self.incoming = incoming
+    }
+
+    public func send(_ payload: Data) async throws {
+        guard let link else { throw GarminLinkError.notReady }
+        link.sendService(payload, on: handle)
     }
 }
 

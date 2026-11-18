@@ -10,10 +10,13 @@ enum MLRControl {
     private static let closeAllResponseType: UInt8 = 6
     private static let registerRequestType: UInt8 = 0
     private static let registerResponseType: UInt8 = 1
+    private static let closeHandleResponseType: UInt8 = 3
 
     enum Reply: Equatable {
         case closeAll
         case register(service: UInt16, status: UInt8, handle: UInt8)
+        /// The watch closed a service: it has sent everything on it.
+        case closeHandle(service: UInt16, handle: UInt8)
     }
 
     /// Drops every handle a previous client (for example a phone) left on the watch.
@@ -36,6 +39,9 @@ enum MLRControl {
         case registerResponseType:
             guard bytes.count >= 14 else { return nil }
             return .register(service: UInt16(bytes[10]) | UInt16(bytes[11]) << 8, status: bytes[12], handle: bytes[13])
+        case closeHandleResponseType:
+            guard bytes.count >= 13 else { return nil }
+            return .closeHandle(service: UInt16(bytes[10]) | UInt16(bytes[11]) << 8, handle: bytes[12])
         default:
             return nil
         }
