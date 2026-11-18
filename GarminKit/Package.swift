@@ -40,6 +40,7 @@ let package = Package(
         .testTarget(name: "GarminFITTests", dependencies: ["GarminFIT"], resources: [.copy("Fixtures")]),
         .testTarget(name: "GarminTransportTests", dependencies: ["GarminTransport"]),
         .testTarget(name: "GarminDevicesTests", dependencies: ["GarminDevices"]),
+        .testTarget(name: "GarminHealthTests", dependencies: ["GarminHealth", "GarminModels"]),
         .testTarget(name: "GarminSessionTests", dependencies: ["GarminSession"]),
     ]
 )
