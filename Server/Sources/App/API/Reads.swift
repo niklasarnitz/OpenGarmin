@@ -107,17 +107,26 @@ enum Reads {
         let externalId: String
     }
 
-    static func window(_ req: Request) throws -> Window {
-        let from = try date(req, "from") ?? Date(timeIntervalSince1970: 0)
-        let to = try date(req, "to") ?? Date().addingTimeInterval(366 * 86_400)
+    /// `from` and `to` are ISO 8601 instants or `YYYY-MM-DD` days, which start at midnight in `timeZone` (the user's).
+    static func window(_ req: Request, timeZone: String = Accounts.defaultTimeZone) throws -> Window {
+        let from = try date(req, "from", timeZone: timeZone) ?? Date(timeIntervalSince1970: 0)
+        let to = try date(req, "to", timeZone: timeZone) ?? Date().addingTimeInterval(366 * 86_400)
         guard from <= to else { throw Abort(.badRequest, reason: "`from` must not be after `to`.") }
         return Window(from: from, to: to)
     }
 
-    static func date(_ req: Request, _ name: String) throws -> Date? {
+    static func date(_ req: Request, _ name: String, timeZone: String = Accounts.defaultTimeZone) throws -> Date? {
         guard let text = req.query[String.self, at: name] else { return nil }
+        if text.count == 10, let day = CivilDay.parse(text) {
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = TimeZone(identifier: timeZone) ?? TimeZone(identifier: Accounts.defaultTimeZone)!
+            let parts = CivilDay.parts(day)
+            if let start = calendar.date(from: DateComponents(year: parts.year, month: parts.month, day: parts.day)) {
+                return start
+            }
+        }
         guard let parsed = TimeCoding.parse(text) else {
-            throw Abort(.badRequest, reason: "`\(name)` must be an ISO 8601 date.")
+            throw Abort(.badRequest, reason: "`\(name)` must be YYYY-MM-DD or an ISO 8601 date.")
         }
         return parsed
     }
@@ -129,7 +138,7 @@ enum Reads {
         guard let metric = Metric(rawValue: req.parameters.get("metric") ?? "") else {
             throw Abort(.notFound, reason: "Unknown metric.")
         }
-        let window = try window(req)
+        let window = try window(req, timeZone: user.timeZone)
         let sql = try req.sql
         let resolution = req.query[String.self, at: "resolution"] ?? "raw"
         if resolution == "raw" {

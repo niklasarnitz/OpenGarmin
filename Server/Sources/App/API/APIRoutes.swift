@@ -102,12 +102,12 @@ func registerAPIRoutes(_ app: Application) throws {
     }
     api.get("sleep") { req async throws -> [SleepSessionDTO] in
         let user = try await req.requireUser()
-        return try await Reads.sleep(req, user: user, window: try Reads.window(req))
+        return try await Reads.sleep(req, user: user, window: try Reads.window(req, timeZone: user.timeZone))
     }
     api.get("activities") { req async throws -> ActivityPage in
         let user = try await req.requireUser()
-        var window = try Reads.window(req)
-        if let cursor = try Reads.date(req, "cursor") {
+        var window = try Reads.window(req, timeZone: user.timeZone)
+        if let cursor = try Reads.date(req, "cursor", timeZone: user.timeZone) {
             window.to = min(window.to, cursor)
         }
         let limit = min(max(Int(req.query[String.self, at: "limit"] ?? "") ?? 50, 1), 200)
@@ -133,7 +133,7 @@ func registerAPIRoutes(_ app: Application) throws {
     }
     api.get("days") { req async throws -> [DaySummary] in
         let user = try await req.requireUser()
-        return try await Reads.days(req, user: user, window: try Reads.window(req))
+        return try await Reads.days(req, user: user, window: try Reads.window(req, timeZone: user.timeZone))
     }
     api.get("metrics") { req async throws -> [MetricInfo] in
         let user = try await req.requireUser()
@@ -141,7 +141,7 @@ func registerAPIRoutes(_ app: Application) throws {
     }
     api.get("metrics", "daily") { req async throws -> [MetricDay] in
         let user = try await req.requireUser()
-        let window = try Reads.window(req)
+        let window = try Reads.window(req, timeZone: user.timeZone)
         let names = (req.query[String.self, at: "metrics"] ?? "").split(separator: ",").map(String.init)
         return try await Rollup.daily(req, user: user, window: window, metrics: names)
     }
@@ -151,11 +151,11 @@ func registerAPIRoutes(_ app: Application) throws {
             throw Abort(.notFound, reason: "Not a quantity type.")
         }
         let resolution = req.query[String.self, at: "resolution"] ?? "day"
-        return try await HealthKitImport.quantities(req, user: user, type: type, window: try Reads.window(req), resolution: resolution)
+        return try await HealthKitImport.quantities(req, user: user, type: type, window: try Reads.window(req, timeZone: user.timeZone), resolution: resolution)
     }
     api.get("export", "history") { req async throws -> Response in
         let user = try await req.requireUser()
-        let batch = try await Reads.history(req, user: user, window: try Reads.window(req))
+        let batch = try await Reads.history(req, user: user, window: try Reads.window(req, timeZone: user.timeZone))
         return try Response.json(batch)
     }
 }

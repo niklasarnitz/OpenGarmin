@@ -218,6 +218,11 @@ final class ServerTests: XCTestCase {
                 "2026-01-11 stress garmin 30.0 20.0 40.0",
             ])
 
+            // The dashboard sends plain days, which start at midnight in the user's time zone.
+            let days = try await dailyRows(h, token: token, query: "/api/v1/metrics/daily?from=2026-01-10&to=2026-01-13"
+                + "&metrics=steps,stress,HKQuantityTypeIdentifierStepCount")
+            XCTAssertEqual(days, berlin)
+
             // Day boundaries move with the user's time zone: in UTC both steps are on the 10th.
             let patched = try await send(h, .PATCH, "/api/v1/me", headers: headers(bearer: token), body: try json(["timeZone": "UTC"]))
             XCTAssertEqual(patched.status, .ok)
