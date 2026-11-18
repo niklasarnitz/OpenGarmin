@@ -30,6 +30,7 @@ struct DeviceView: View {
                 faceCard(watch)
                 connection(watch)
                 profile
+                installs
                 features
                 notifications(watch)
                 satelliteData
@@ -107,6 +108,16 @@ struct DeviceView: View {
                 ProfileEditorView()
             } label: {
                 Label("Edit profile and send to watch", systemImage: "pencil")
+            }
+        }
+    }
+
+    private var installs: some View {
+        MetricTile("Apps and courses", symbol: "square.and.arrow.down.fill", tint: Palette.amber) {
+            NavigationLink {
+                InstallView()
+            } label: {
+                Label("Install apps and courses", systemImage: "square.and.arrow.down")
             }
         }
     }

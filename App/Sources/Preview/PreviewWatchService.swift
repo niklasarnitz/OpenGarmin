@@ -79,6 +79,30 @@ final class PreviewWatchService: WatchService {
     func updateProfile(_ profile: UserProfile) async throws { try await simulateRoundTrip() }
     func setTime() async throws { try await simulateRoundTrip() }
 
+    private(set) var installedApps: [InstalledApp] = [
+        InstalledApp(id: UUID(), name: "Moon Phase", kind: .watchFace, version: 3, isSystem: false),
+        InstalledApp(id: UUID(), name: "Gradient Sky", kind: .watchFace, version: nil, isSystem: true),
+        InstalledApp(id: UUID(), name: "Cadence Plus", kind: .dataField, version: 12, isSystem: false),
+    ]
+
+    func refreshInstalledApps() async throws { try await simulateRoundTrip() }
+
+    func deleteInstalledApp(_ app: InstalledApp) async throws {
+        try await simulateRoundTrip()
+        installedApps.removeAll { $0 == app }
+    }
+
+    func installApp(_ prg: Data, progress: @escaping @MainActor (Double) -> Void) async throws {
+        try await simulateRoundTrip()
+        progress(1)
+    }
+
+    func installCourse(gpx: Data, name: String, includeTurns: Bool,
+                       progress: @escaping @MainActor (Double) -> Void) async throws {
+        try await simulateRoundTrip()
+        progress(1)
+    }
+
     private func simulateRoundTrip() async throws {
         try await Task.sleep(for: .milliseconds(500))
     }
