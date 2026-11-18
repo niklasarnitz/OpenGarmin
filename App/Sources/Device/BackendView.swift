@@ -14,7 +14,12 @@ struct BackendView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                if signedIn { statusTile } else { signInTile }
+                if signedIn {
+                    statusTile
+                    healthKitTile
+                } else {
+                    signInTile
+                }
                 if let errorMessage {
                     Text(errorMessage)
                         .font(.footnote)
@@ -99,6 +104,40 @@ struct BackendView: View {
             }
             .labelStyle(.iconOnly)
             .controlSize(.regular)
+        }
+    }
+
+    private var healthKitTile: some View {
+        let health = app.backend.healthKit
+        return MetricTile("Apple Health", symbol: "heart.text.square.fill", tint: Palette.ember) {
+            Text("Uploads every Health type from every source, month by month. Nothing is written to Health. Parts the server has are skipped, so an interrupted upload picks up where it stopped.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            LabeledContent("Uploaded", value: "\(health.uploaded)")
+            if let completed = health.completedAt {
+                LabeledContent("Completed", value: Formatting.lastSeen(completed))
+            }
+            if let progress = health.progress {
+                Text(progress)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            if let error = health.errorMessage {
+                Text(error)
+                    .font(.footnote)
+                    .foregroundStyle(Palette.ember)
+            }
+            if !health.skipped.isEmpty {
+                LabeledContent("Skipped", value: "\(health.skipped.count)")
+            }
+            if health.isRunning {
+                Button("Cancel", systemImage: "xmark.circle") { health.cancel() }
+                    .buttonStyle(.glass)
+            } else {
+                Button(health.completedAt == nil ? "Upload all Apple Health data" : "Upload again",
+                       systemImage: "arrow.up.circle.fill") { health.start() }
+                    .buttonStyle(.glassProminent)
+            }
         }
     }
 

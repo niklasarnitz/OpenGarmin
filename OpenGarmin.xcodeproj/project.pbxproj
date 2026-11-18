@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		03909B80966ED30B8D7EAE6C /* HealthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12AAAB9884D5CEE58BF72E6B /* HealthStore.swift */; };
+		1633C2F2F3713A82C4FBB423 /* HealthKitTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1308906F3C0D0F1C12B8AEBB /* HealthKitTypes.swift */; };
 		18E65BC4BA846A95DDEFB002 /* WorkoutBuilderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58E91D1D7A437D7EDAF7294A /* WorkoutBuilderView.swift */; };
 		1CD39CDA86E9AFA2C97EAA4F /* OpenGarminWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8C9F79271245B48EDD6BD3D7 /* OpenGarminWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		1EDC72601C3E15F6D8403F7F /* SyncProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9922DF75E97C458230A4D0E3 /* SyncProgressView.swift */; };
@@ -16,6 +17,7 @@
 		28CB24B2DD3E6A1952BC3123 /* WatchSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B62DE4A421248C88377A8B81 /* WatchSettingsView.swift */; };
 		2BDDCB0AB6C32E34A015B5E1 /* BackgroundSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C8C8324E78DA5D3845756E /* BackgroundSync.swift */; };
 		3317152A87876105BD88C933 /* InstallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33B626B2A1AD09290F2A7BE4 /* InstallView.swift */; };
+		3881A56D9BB39D7B5F0EB221 /* HealthKitBackfill.swift in Sources */ = {isa = PBXBuildFile; fileRef = E38C26134A56E67393EEF272 /* HealthKitBackfill.swift */; };
 		3943DA0BEDEA99422348F928 /* CourseImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 013D03FB49D92EA1A3DEBD0E /* CourseImportView.swift */; };
 		3A4AC02316A72D6EF5658856 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9C1522E98A9929715FDC41E6 /* Assets.xcassets */; };
 		3EA46819A54A1AAF33262795 /* TrainingPlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1252739427C8028E882FBD01 /* TrainingPlanView.swift */; };
@@ -97,6 +99,7 @@
 		0DAC9E480BBAC0305C82B88C /* GarminKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = GarminKit; path = GarminKit; sourceTree = SOURCE_ROOT; };
 		1252739427C8028E882FBD01 /* TrainingPlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainingPlanView.swift; sourceTree = "<group>"; };
 		12AAAB9884D5CEE58BF72E6B /* HealthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthStore.swift; sourceTree = "<group>"; };
+		1308906F3C0D0F1C12B8AEBB /* HealthKitTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitTypes.swift; sourceTree = "<group>"; };
 		15B8E20792F27FE992C2CA9C /* CalendarSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarSettingsView.swift; sourceTree = "<group>"; };
 		1930890AA4F22521AB81AE30 /* CalendarSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarSync.swift; sourceTree = "<group>"; };
 		1E894ACE8D830A7A3F4EC23F /* FindMyPhoneAlert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindMyPhoneAlert.swift; sourceTree = "<group>"; };
@@ -137,6 +140,7 @@
 		CFB11636FC10B27F8EEE37FC /* OpenGarminShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenGarminShortcuts.swift; sourceTree = "<group>"; };
 		DA1A938A12CA0D346E1B85F7 /* OpenGarminWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenGarminWidgets.swift; sourceTree = "<group>"; };
 		E0EB1E140B6068271E4DC889 /* ActivityExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityExport.swift; sourceTree = "<group>"; };
+		E38C26134A56E67393EEF272 /* HealthKitBackfill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitBackfill.swift; sourceTree = "<group>"; };
 		E7B1B38ECED705C4375C6AFD /* ConnectImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectImportView.swift; sourceTree = "<group>"; };
 		ED52FCFCB2D9B4B426865293 /* Permissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Permissions.swift; sourceTree = "<group>"; };
 		EF7D06299C939C6BCA3CD3CA /* ActivitiesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivitiesView.swift; sourceTree = "<group>"; };
@@ -372,6 +376,8 @@
 				A9C8C8324E78DA5D3845756E /* BackgroundSync.swift */,
 				1930890AA4F22521AB81AE30 /* CalendarSync.swift */,
 				1E894ACE8D830A7A3F4EC23F /* FindMyPhoneAlert.swift */,
+				E38C26134A56E67393EEF272 /* HealthKitBackfill.swift */,
+				1308906F3C0D0F1C12B8AEBB /* HealthKitTypes.swift */,
 				12AAAB9884D5CEE58BF72E6B /* HealthStore.swift */,
 				892F64580F9C212790DFAA60 /* LiveSync.swift */,
 				ED52FCFCB2D9B4B426865293 /* Permissions.swift */,
@@ -509,6 +515,8 @@
 				7E81CE93BC975632B0473887 /* DeviceView.swift in Sources */,
 				E6BDB58A68707B3B6C95EC63 /* EmergencyContactsView.swift in Sources */,
 				3EEF1F4B50A5D048465BF5F5 /* FindMyPhoneAlert.swift in Sources */,
+				3881A56D9BB39D7B5F0EB221 /* HealthKitBackfill.swift in Sources */,
+				1633C2F2F3713A82C4FBB423 /* HealthKitTypes.swift in Sources */,
 				03909B80966ED30B8D7EAE6C /* HealthStore.swift in Sources */,
 				95F7A59465B964DCCC8D777E /* InsightsView.swift in Sources */,
 				3317152A87876105BD88C933 /* InstallView.swift in Sources */,

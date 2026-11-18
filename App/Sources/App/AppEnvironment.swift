@@ -40,8 +40,9 @@ final class AppEnvironment {
         WatchCommands.findMyWatch = { try await watch.findMyWatch() }
         WatchCommands.sendWorkout = { try await watch.sendWorkout($0) }
         LiveSync.start(watch)
-        // Uploads what a previous run left behind.
+        // Uploads what a previous run left behind, and finishes an Apple Health upload that was killed.
         backend.requestUpload()
+        backend.healthKit.resumeIfStarted()
         return environment
     }
 

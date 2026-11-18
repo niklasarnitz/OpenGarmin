@@ -112,6 +112,20 @@ public struct BackendClient: Sendable {
         _ = try await send(BackendRequests.batch(baseURL, token: token, key: key, source: source, batch: batch))
     }
 
+    // MARK: - Apple Health
+
+    public func uploadSamples(_ items: [BackendSample], key: String) async throws {
+        _ = try await send(BackendRequests.healthKit(baseURL, token: token, path: "healthkit/samples", key: key, items: items))
+    }
+
+    public func uploadWorkouts(_ items: [BackendWorkout], key: String) async throws {
+        _ = try await send(BackendRequests.healthKit(baseURL, token: token, path: "healthkit/workouts", key: key, items: items))
+    }
+
+    public func uploadElectrocardiograms(_ items: [BackendElectrocardiogram], key: String) async throws {
+        _ = try await send(BackendRequests.healthKit(baseURL, token: token, path: "healthkit/electrocardiograms", key: key, items: items))
+    }
+
     // MARK: - Transport
 
     /// The body of a response with a 2xx status. Other statuses throw.

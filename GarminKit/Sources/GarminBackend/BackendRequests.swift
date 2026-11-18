@@ -47,7 +47,17 @@ enum BackendRequests {
         try json("POST", base, "batches", token: token, Batch(key: key, source: source.rawValue, batch: batch))
     }
 
+    /// A chunk of Apple Health items under its key, as `{key, items}`.
+    static func healthKit<T: Encodable>(_ base: URL, token: String?, path: String, key: String, items: [T]) throws -> URLRequest {
+        try json("POST", base, path, token: token, HealthKitChunk(key: key, items: items))
+    }
+
     // MARK: - Building blocks
+
+    private struct HealthKitChunk<T: Encodable>: Encodable {
+        let key: String
+        let items: [T]
+    }
 
     private struct Credentials: Encodable {
         let email: String

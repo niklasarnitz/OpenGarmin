@@ -25,6 +25,8 @@ final class BackendSync {
     private(set) var rejected: [String: String] = BackendSync.storedRejections()
     private(set) var lastError: String?
 
+    /// The one-time upload of the whole Apple Health history. It uses this sync's client factory.
+    let healthKit: HealthKitBackfill
     @ObservationIgnored private let directory: URL
     @ObservationIgnored private var rerun = false
     @ObservationIgnored private var retryRequested = false
@@ -32,6 +34,7 @@ final class BackendSync {
     /// - Parameter directory: the app's Application Support folder, where the import stage keeps the files.
     init(directory: URL) {
         self.directory = directory
+        healthKit = HealthKitBackfill { try? BackendSync.client() }
     }
 
     /// Starts an upload run unless one is going. Does nothing until the user has signed in. Automatic runs skip the files
@@ -55,10 +58,8 @@ final class BackendSync {
     }
 
     private func upload(retryRejected: Bool) async {
-        guard let token = BackendKeychain.token() else { return }
-        let server = UserDefaults.standard.string(forKey: Self.serverKey) ?? Self.defaultServer
         do {
-            let client = try BackendClient(server: server, token: token)
+            guard let client = try Self.client() else { return }
             let report = await BackendUploader.run(directory: directory, client: client,
                                                    rejected: retryRejected ? [:] : rejected)
             pending = report.pending
@@ -72,6 +73,12 @@ final class BackendSync {
         } catch {
             lastError = error.localizedDescription
         }
+    }
+
+    /// The client for the signed-in account, or nil when no one is signed in. Throws when the server URL is not valid.
+    static func client() throws -> BackendClient? {
+        guard let token = BackendKeychain.token() else { return nil }
+        return try BackendClient(server: UserDefaults.standard.string(forKey: serverKey) ?? defaultServer, token: token)
     }
 
     private func saveRejections() {

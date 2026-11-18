@@ -1371,6 +1371,86 @@
         }
       }
     },
+    "Apple Health" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Health"
+          }
+        }
+      }
+    },
+    "Uploads every Health type from every source, month by month. Nothing is written to Health. Parts the server has are skipped, so an interrupted upload picks up where it stopped." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lädt jeden Health-Datentyp aus jeder Quelle, Monat für Monat, hoch. Es wird nichts in Health geschrieben. Teile, die der Server schon hat, werden übersprungen, daher setzt ein unterbrochener Upload dort fort, wo er stoppte."
+          }
+        }
+      }
+    },
+    "Uploaded" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hochgeladen"
+          }
+        }
+      }
+    },
+    "Completed" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abgeschlossen"
+          }
+        }
+      }
+    },
+    "Upload all Apple Health data" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Apple-Health-Daten hochladen"
+          }
+        }
+      }
+    },
+    "Upload again" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erneut hochladen"
+          }
+        }
+      }
+    },
+    "Sign in to the backend first." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zuerst am Backend anmelden."
+          }
+        }
+      }
+    },
+    "Health data is not available on this device." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Health-Daten sind auf diesem Gerät nicht verfügbar."
+          }
+        }
+      }
+    },
     "Never" : {
       "localizations" : {
         "de" : {
