@@ -136,6 +136,41 @@ private func client(_ server: FakeServer) throws -> BackendClient {
 
 @Suite struct BackendUploaderTests {
     /// A folder like the app's Application Support folder: two FIT files and one batch, none of them on the server yet.
+    @Test func rawConnectResponsesAreSentOnceWithTheirBodyAsIs() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let folder = directory.appending(path: "ConnectRaw/dailyStress", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data(#"{"stressValuesArray" : [[1767225600000, 0, 30]]}"#.utf8).write(to: folder.appending(path: "2026-01-02.json"))
+        let hrv = directory.appending(path: "ConnectRaw/hrv", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: hrv, withIntermediateDirectories: true)
+        try Data("<html>not json</html>".utf8).write(to: hrv.appending(path: "2026-01-02.json"))
+        let server = FakeServer { request in
+            request.url?.path == "/api/v1/sync/state" ? (200, Data(#"{"keys":[]}"#.utf8)) : (200, Data("{}".utf8))
+        }
+        let report = await BackendUploader.run(directory: directory, client: try client(server))
+
+        #expect(report.uploaded == 1)
+        #expect(report.rejected == ["connect-raw-hrv-2026-01-02": "The response is not JSON."])
+        let uploads = await server.requests.filter { $0.url?.path == "/api/v1/connect/raw" }
+        #expect(uploads.count == 1)
+        let sentData = try #require(uploads.first?.httpBody)
+        let sent = try #require(JSONSerialization.jsonObject(with: sentData) as? [String: Any])
+        #expect(sent["key"] as? String == "connect-raw-dailyStress-2026-01-02")
+        #expect(sent["endpoint"] as? String == "dailyStress")
+        #expect(sent["day"] as? String == "2026-01-02")
+        #expect(sent["fetchedAt"] != nil)
+        let body = try #require(sent["body"] as? [String: Any])
+        #expect(body["stressValuesArray"] as? [[Double]] == [[1767225600000, 0, 30]])
+
+        let again = FakeServer { request in
+            request.url?.path == "/api/v1/sync/state"
+                ? (200, Data(#"{"keys":["connect-raw-dailyStress-2026-01-02"]}"#.utf8)) : (200, Data("{}".utf8))
+        }
+        let second = await BackendUploader.run(directory: directory, client: try client(again), rejected: report.rejected)
+        #expect(second.uploaded == 0)
+        #expect(await again.requests.filter { $0.httpMethod == "POST" }.isEmpty)
+    }
+
     private func makeFolder() throws -> URL {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory.appending(path: "FIT"), withIntermediateDirectories: true)

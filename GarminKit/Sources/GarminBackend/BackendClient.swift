@@ -112,6 +112,12 @@ public struct BackendClient: Sendable {
         _ = try await send(BackendRequests.batch(baseURL, token: token, key: key, source: source, batch: batch))
     }
 
+    /// A raw Garmin Connect response: `body` is its parsed JSON, which the server keeps as it arrived.
+    public func uploadConnectRaw(_ body: Any, key: String, endpoint: String, day: String, fetchedAt: Date) async throws {
+        _ = try await send(BackendRequests.connectRaw(baseURL, token: token, key: key, endpoint: endpoint, day: day,
+                                                      fetchedAt: fetchedAt, body: body))
+    }
+
     // MARK: - Apple Health
 
     public func uploadSamples(_ items: [BackendSample], key: String) async throws {

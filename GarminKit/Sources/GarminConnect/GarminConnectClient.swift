@@ -8,6 +8,8 @@ public enum GarminConnectError: Error, Equatable, Sendable, LocalizedError {
     case notSignedIn
     case malformedResponse
     case http(Int)
+    /// Garmin answered HTTP 429. `retryAfter` is the Retry-After header in seconds, when it sent one.
+    case rateLimited(retryAfter: Double?)
     case keychain(OSStatus)
 
     public var errorDescription: String? {
@@ -16,6 +18,7 @@ public enum GarminConnectError: Error, Equatable, Sendable, LocalizedError {
         case .notSignedIn: "Sign in to Garmin Connect first."
         case .malformedResponse: "Garmin sent a response OpenGarmin does not understand."
         case let .http(status): "Garmin Connect answered with HTTP \(status)."
+        case .rateLimited: "Garmin Connect is limiting requests. The import waits and tries again."
         case let .keychain(status): "The sign-in could not be saved to the Keychain (\(status))."
         }
     }
@@ -23,6 +26,9 @@ public enum GarminConnectError: Error, Equatable, Sendable, LocalizedError {
 
 /// Signs in to Garmin Connect and reads the account's data, the way garth does. The password goes to Garmin's SSO once
 /// and is not kept. The OAuth tokens are kept in the Keychain, and the OAuth2 access token is renewed when it expires.
+///
+/// Every Connect API call takes one of three request slots, so the import never has more than three requests in flight,
+/// and it waits out Garmin's rate limit. Each response is kept in the raw store before it is parsed.
 public actor GarminConnectClient {
     public enum SignIn: Equatable, Sendable {
         case signedIn
@@ -30,12 +36,20 @@ public actor GarminConnectClient {
         case mfaRequired(method: String)
     }
 
-    private var session = URLSession(configuration: .ephemeral)
+    private var session: URLSession
     private var credentials: ConnectCredentials?
     private var mfaMethod: String?
+    private let raw: ConnectRawStore
+    private let limiter = ConnectRequestLimiter(limit: 3)
 
-    public init() {
-        credentials = ConnectKeychain.load()
+    public init(raw: ConnectRawStore) {
+        self.init(raw: raw, session: URLSession(configuration: .ephemeral), credentials: ConnectKeychain.load())
+    }
+
+    init(raw: ConnectRawStore, session: URLSession, credentials: ConnectCredentials?) {
+        self.raw = raw
+        self.session = session
+        self.credentials = credentials
     }
 
     public var isSignedIn: Bool { credentials != nil }
@@ -85,7 +99,10 @@ public actor GarminConnectClient {
     public func activities(start: Int, limit: Int, from: Date?, to: Date?, calendar: Calendar = .current) async throws
         -> [ConnectActivity] {
         let query = ConnectRequests.activitiesQuery(start: start, limit: limit, from: from, to: to, calendar: calendar)
-        return try ConnectParsing.activities(await get(ConnectRequests.activitiesPath, query: query))
+        let body = try await get(ConnectRequests.activitiesPath, query: query)
+        let range = [from, to].map { $0.map { ConnectRequests.day($0, calendar: calendar) } ?? "all" }
+        try raw.save(body, endpoint: "activities", name: "\(range[0])_\(range[1])_\(start)")
+        return try ConnectParsing.activities(body)
     }
 
     /// The FIT file in an activity's original download, a zip archive. Nil when the archive holds no FIT file.
@@ -94,25 +111,40 @@ public actor GarminConnectClient {
         return try ZipArchive.entries(archive).first { $0.name.lowercased().hasSuffix(".fit") }?.data
     }
 
-    /// One calendar day of Garmin's daily data as a batch: stress and Body Battery, the sleep that ends on the day, the
-    /// steps, the resting heart rate and the HRV of that night. A part Garmin has no data for is left out.
-    public func dailyBatch(day: Date, calendar: Calendar = .current) async throws -> HealthBatch {
+    /// The kinds asked for from one calendar day. A response already in the raw store is parsed from there, when
+    /// `useArchive` is set; otherwise Garmin is asked, and each non-empty response is kept before it is parsed. A kind
+    /// Garmin has no data for comes back empty.
+    public func dailyData(day: Date, kinds: Set<ConnectDayKind>, useArchive: Bool, calendar: Calendar = .current) async throws
+        -> [ConnectDayKind: HealthBatch] {
         let date = ConnectRequests.day(day, calendar: calendar)
+        return try await ConnectDaily.resolve(kinds, day: day, calendar: calendar) { endpoint in
+            if useArchive, let body = self.raw.load(endpoint: endpoint, name: date) { return body }
+            let body = try await self.fetchDay(endpoint, date: date)
+            if !body.isEmpty { try self.raw.save(body, endpoint: endpoint, name: date) }
+            return body
+        }
+    }
+
+    /// The body of one daily endpoint for a date "yyyy-MM-dd". Garmin answers a day without data with 404, which reads as
+    /// an empty body.
+    private func fetchDay(_ endpoint: String, date: String) async throws -> Data {
         let dayItem = [URLQueryItem(name: "date", value: date)]
-        let name = try await displayName()
-        var batch = HealthBatch()
-        let (stress, bodyBattery) = try ConnectParsing.dailyStress(await get(ConnectRequests.dailyStressPath(date), query: []))
-        batch.stress = stress
-        batch.bodyBattery = bodyBattery
-        let sleep = try await dayData(ConnectRequests.dailySleepPath(name),
-                                      query: dayItem + [URLQueryItem(name: "nonSleepBufferMinutes", value: "60")])
-        batch.sleep = ConnectParsing.sleep(sleep).map { [$0] } ?? []
-        batch.steps = ConnectParsing.steps(try await dayData(ConnectRequests.stepsChartPath(name), query: dayItem))
-        let summary = try await dayData(ConnectRequests.dailySummaryPath(name),
-                                        query: [URLQueryItem(name: "calendarDate", value: date)])
-        batch.restingHeartRate = ConnectParsing.restingHeartRate(summary).map { [PointSample(date: calendar.startOfDay(for: day), value: $0)] } ?? []
-        batch.hrv = ConnectParsing.hrv(try await dayData(ConnectRequests.hrvPath(date), query: [])).map { [$0] } ?? []
-        return batch
+        switch endpoint {
+        case "dailyStress":
+            return try await dayData(ConnectRequests.dailyStressPath(date), query: [])
+        case "dailySleepData":
+            return try await dayData(ConnectRequests.dailySleepPath(try await displayName()),
+                                     query: dayItem + [URLQueryItem(name: "nonSleepBufferMinutes", value: "60")])
+        case "dailySummaryChart":
+            return try await dayData(ConnectRequests.stepsChartPath(try await displayName()), query: dayItem)
+        case "usersummary":
+            return try await dayData(ConnectRequests.dailySummaryPath(try await displayName()),
+                                     query: [URLQueryItem(name: "calendarDate", value: date)])
+        case "hrv":
+            return try await dayData(ConnectRequests.hrvPath(date), query: [])
+        default:
+            throw GarminConnectError.malformedResponse
+        }
     }
 
     /// The display name of the account, read once and kept with the credentials.
@@ -127,8 +159,7 @@ public actor GarminConnectClient {
         return name
     }
 
-    /// The body of a per-day endpoint. Garmin answers a day without data with 404, which reads as an empty body, so the
-    /// parsers return nothing for it.
+    /// The body of a per-day endpoint. Garmin answers a day without data with 404, which reads as an empty body.
     private func dayData(_ path: String, query: [URLQueryItem]) async throws -> Data {
         do {
             return try await get(path, query: query)
@@ -170,14 +201,22 @@ public actor GarminConnectClient {
         return saved.access
     }
 
+    /// One Connect API call: it holds a request slot, and waits out a rate limit before it is sent again.
     private func get(_ path: String, query: [URLQueryItem]) async throws -> Data {
-        let access = try await accessToken()
-        return try await send(ConnectRequests.apiRequest(path, query: query, accessToken: access))
+        try await limiter.run {
+            try await retryingWhenRateLimited {
+                let access = try await self.accessToken()
+                return try await self.send(ConnectRequests.apiRequest(path, query: query, accessToken: access))
+            }
+        }
     }
 
     private func send(_ request: URLRequest) async throws -> Data {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw GarminConnectError.malformedResponse }
+        if http.statusCode == 429 {
+            throw GarminConnectError.rateLimited(retryAfter: http.value(forHTTPHeaderField: "Retry-After").flatMap(Double.init))
+        }
         guard (200..<300).contains(http.statusCode) else { throw GarminConnectError.http(http.statusCode) }
         return data
     }

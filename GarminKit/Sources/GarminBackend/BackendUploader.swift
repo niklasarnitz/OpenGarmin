@@ -13,13 +13,15 @@ public struct UploadReport: Sendable, Equatable {
     public var failure: BackendError?
 }
 
-/// Uploads what the server lacks: the FIT files in `FIT/` and the batches in `Batches/`, under `directory` (the app's
-/// Application Support folder). The keys come from `sync/state`, so a run is idempotent and a stopped run resumes on the
-/// next one.
+/// Uploads what the server lacks: the FIT files in `FIT/`, the batches in `Batches/` and the raw Garmin Connect
+/// responses in `ConnectRaw/`, under `directory` (the app's Application Support folder). The keys come from `sync/state`,
+/// so a run is idempotent and a stopped run resumes on the next one.
 public enum BackendUploader {
-    /// The folders of the import stage: FIT files in `FIT/`, and batches as JSON in `Batches/`.
+    /// The folders of the import stage: FIT files in `FIT/`, batches as JSON in `Batches/`, and Garmin Connect responses
+    /// as `ConnectRaw/<endpoint>/<day>.json` (`GarminConnect.ConnectRawStore` writes them).
     private static let fitFolder = "FIT"
     private static let batchFolder = "Batches"
+    private static let rawFolder = "ConnectRaw"
 
     /// - Parameter rejected: refusals from earlier runs, by key. Those files are skipped, not tried again. Pass an empty
     ///   map to try every file.
@@ -60,7 +62,23 @@ public enum BackendUploader {
             .map { Item.fit(key: $0.key, url: $0.url) }
         let batches = files(in: directory.appending(path: batchFolder, directoryHint: .isDirectory), extension: "json")
             .map { Item.batch(key: $0.key, url: $0.url) }
-        return fits + batches
+        return fits + batches + rawItems(in: directory)
+    }
+
+    /// Each raw Garmin Connect response, under `connect-raw-<endpoint>-<day>`. Its fetch time is the file's write time.
+    private static func rawItems(in directory: URL) -> [Item] {
+        let root = directory.appending(path: rawFolder, directoryHint: .isDirectory)
+        let endpoints = ((try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.hasDirectoryPath }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        return endpoints.flatMap { folder -> [Item] in
+            let endpoint = folder.lastPathComponent
+            return files(in: folder, extension: "json").map { file in
+                let modified = (try? file.url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+                return Item.raw(key: "connect-raw-\(endpoint)-\(file.key)", endpoint: endpoint, day: file.key,
+                                url: file.url, fetchedAt: modified ?? .now)
+            }
+        }
     }
 
     private static func files(in folder: URL, extension ext: String) -> [(key: String, url: URL)] {
@@ -74,10 +92,11 @@ public enum BackendUploader {
     private enum Item {
         case fit(key: String, url: URL)
         case batch(key: String, url: URL)
+        case raw(key: String, endpoint: String, day: String, url: URL, fetchedAt: Date)
 
         var key: String {
             switch self {
-            case let .fit(key, _), let .batch(key, _): key
+            case let .fit(key, _), let .batch(key, _), let .raw(key, _, _, _, _): key
             }
         }
 
@@ -90,6 +109,13 @@ public enum BackendUploader {
             case let .batch(key, url):
                 let batch = try JSONDecoder().decode(HealthBatch.self, from: Data(contentsOf: url))
                 try await client.uploadBatch(batch, key: key, source: source)
+            case let .raw(key, endpoint, day, url, fetchedAt):
+                // A response that is not JSON cannot be sent as one. It is refused, so the run does not stop on it.
+                let data = try Data(contentsOf: url)
+                guard let body = try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) else {
+                    throw BackendError.rejected(status: 400, message: "The response is not JSON.")
+                }
+                try await client.uploadConnectRaw(body, key: key, endpoint: endpoint, day: day, fetchedAt: fetchedAt)
             }
         }
     }

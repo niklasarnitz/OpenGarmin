@@ -42,6 +42,12 @@ struct HistoryStore {
         var batch: HealthBatch
     }
 
+    /// The imported-file key of a check that found nothing to import. It keeps such a check apart from data, so the
+    /// next import skips the check without saving an empty batch.
+    static func checkedKey(_ fileKey: String) -> String {
+        "checked:" + fileKey
+    }
+
     let directory: URL
     private(set) var snapshot: Snapshot
     /// How many snapshots have been written by this store. Tests use it to check that a batch costs one write.
