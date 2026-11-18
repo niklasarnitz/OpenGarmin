@@ -29,10 +29,21 @@ private func day(_ y: Int, _ m: Int, _ d: Int, _ h: Int = 0) -> Date {
         == DateInterval(start: day(2025, 12, 1), end: day(2026, 1, 1)))
 }
 
-@Test func smoothingKeepsOneDayRawAndAveragesLongerSpansWithoutBridgingGaps() {
+@Test func smoothingAveragesOneDayIntoAboutTenMinuteBuckets() {
     let start = Date(timeIntervalSinceReferenceDate: 0)
-    let oneDay = (0..<10).map { PointSample(date: start.addingTimeInterval(Double($0) * 3600), value: Double($0 % 2) * 100) }
-    #expect(ChartSmoothing.smoothed(oneDay) == oneDay)
+    // Ten minutes of readings stay raw.
+    let short = (0..<10).map { PointSample(date: start.addingTimeInterval(Double($0) * 60), value: Double($0 % 2) * 100) }
+    #expect(ChartSmoothing.smoothed(short) == short)
+
+    // A day of stress every three minutes, jumping between 20 and 80: 576-second buckets, three buckets averaged.
+    let day = (0..<480).map { PointSample(date: start.addingTimeInterval(Double($0) * 180), value: $0 % 2 == 0 ? 20 : 80) }
+    let smoothed = ChartSmoothing.smoothed(day)
+    #expect((140...160).contains(smoothed.count))
+    #expect(smoothed.allSatisfy { (35...65).contains($0.value) })
+}
+
+@Test func smoothingAveragesLongerSpansWithoutBridgingGaps() {
+    let start = Date(timeIntervalSinceReferenceDate: 0)
 
     // Three days: hourly buckets. Hours 0 and 1 hold readings (10 and 30, and 50), hour 2 is empty, hour 3 holds 90,
     // and a last reading 70 hours in stretches the span past 36 hours.

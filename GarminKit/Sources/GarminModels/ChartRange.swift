@@ -30,12 +30,14 @@ public enum ChartRangePreset: String, Sendable, CaseIterable, Identifiable {
     }
 }
 
-/// Smoothing for charts that span several days, so minute-level readings such as stress do not draw as noise.
+/// Smoothing for every time chart, so minute-level readings such as stress or heart rate do not draw as noise.
 public enum ChartSmoothing {
-    /// How wide one averaged bucket is for a chart spanning `span` seconds. Nil keeps the raw points (up to 36 hours).
+    /// How wide one averaged bucket is for a chart spanning `span` seconds. Up to 36 hours the chart gets about 150
+    /// buckets (ten minutes for a day, 24 seconds for an hour-long activity); spans under 15 minutes stay raw.
     public static func bucketWidth(forSpan span: TimeInterval) -> TimeInterval? {
         switch span {
-        case ...(36 * 3600): nil
+        case ..<(15 * 60): nil
+        case ...(36 * 3600): (span / 150).rounded()
         case ...(8 * 86_400): 3600
         case ...(35 * 86_400): 4 * 3600
         default: 86_400
@@ -45,10 +47,11 @@ public enum ChartSmoothing {
     /// The points averaged into buckets sized for their own span, then each bucket averaged with its direct neighbours
     /// (a centred moving average over three buckets). Buckets without readings stay gaps: a neighbour only counts when
     /// it holds readings, so a night without data is not bridged. Each point sits at the middle of its bucket.
-    public static func smoothed(_ points: [PointSample]) -> [PointSample] {
+    /// `span` sizes the buckets when the chart covers more than the points, such as all of today.
+    public static func smoothed(_ points: [PointSample], span: TimeInterval? = nil) -> [PointSample] {
         guard let first = points.min(by: { $0.date < $1.date })?.date,
               let last = points.max(by: { $0.date < $1.date })?.date,
-              let width = bucketWidth(forSpan: last.timeIntervalSince(first)) else { return points }
+              let width = bucketWidth(forSpan: span ?? last.timeIntervalSince(first)) else { return points }
         let origin = (first.timeIntervalSinceReferenceDate / width).rounded(.down) * width
         var sums: [Int: (total: Double, count: Int)] = [:]
         for point in points {

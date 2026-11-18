@@ -169,11 +169,14 @@ struct SeriesChart: View {
 
     private var spansDays: Bool { (domain?.duration ?? span) > 36 * 3600 }
 
+    /// The span the smoothing buckets are sized for: the whole chart, so every line piece is averaged alike.
+    private var smoothingSpan: TimeInterval { max(domain?.duration ?? 0, span) }
+
     /// The line's pieces and the greyed ranges between them. Gaps shorter than ten minutes, or than one smoothing
     /// bucket on multi-day charts, are left out so single dropped readings do not hatch the chart.
     private var layout: (segments: [[PointSample]], gaps: [DateInterval]) {
-        guard zeroMeansNoData else { return ([ChartSmoothing.smoothed(points)], []) }
-        let bucket = ChartSmoothing.bucketWidth(forSpan: span) ?? 0
+        guard zeroMeansNoData else { return ([ChartSmoothing.smoothed(points, span: smoothingSpan)], []) }
+        let bucket = ChartSmoothing.bucketWidth(forSpan: smoothingSpan) ?? 0
         let whole = domain?.duration ?? span
         // Stress and Body Battery come every few minutes; half an hour without any reading (power saving, watch
         // off) is a gap, as is anything longer than two smoothing buckets on multi-day charts. An activity of an
@@ -205,7 +208,7 @@ struct SeriesChart: View {
                 segments[segments.count - 1].append(point)
             }
         }
-        return (segments.map(ChartSmoothing.smoothed), gaps)
+        return (segments.map { ChartSmoothing.smoothed($0, span: smoothingSpan) }, gaps)
     }
 
     /// The y range of the drawn values with a tenth of their spread above and below, so a ride between 210 and 260 m
