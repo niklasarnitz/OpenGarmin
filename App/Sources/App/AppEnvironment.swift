@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import GarminHealth
 import GarminSession
+import GarminTransport
 
 /// Everything the UI reads from the device stack. Views only ever see `WatchService`.
 @MainActor
@@ -26,6 +27,8 @@ final class AppEnvironment {
             weather: { try? await PhoneSync.weatherReport() },
             calendar: { PhoneSync.calendarEvents() }
         )
+        // State restoration only works when the central exists before launch finishes.
+        if watch.pairedWatch != nil { GarminBluetooth.activate() }
         let environment = AppEnvironment(watch: watch)
         environment.mirrorImportsToHealth()
         return environment

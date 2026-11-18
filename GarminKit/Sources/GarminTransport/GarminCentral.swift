@@ -77,3 +77,13 @@ extension GarminCentral: @preconcurrency CBCentralManagerDelegate {
         links[peripheral.identifier]?.didDisconnect(error)
     }
 }
+
+/// App-facing entry point for Core Bluetooth lifecycle.
+public enum GarminBluetooth {
+    /// Creates the shared central now. Call it synchronously during launch when a watch is paired, so iOS can hand
+    /// restored connections to a background relaunch. Creating it shows the Bluetooth permission prompt, so do not
+    /// call it before onboarding.
+    @MainActor public static func activate() {
+        _ = GarminCentral.shared.manager
+    }
+}
