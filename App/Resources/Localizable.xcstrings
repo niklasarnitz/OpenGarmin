@@ -91,6 +91,16 @@
         }
       }
     },
+    "%lld per minute" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld pro Minute"
+          }
+        }
+      }
+    },
     "%lld times" : {
       "localizations" : {
         "de" : {
@@ -187,6 +197,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aktivitäten"
+          }
+        }
+      }
+    },
+    "Activities %lld of %lld" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktivitäten %lld von %lld"
           }
         }
       }
@@ -651,6 +671,16 @@
         }
       }
     },
+    "Days %lld of %lld" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tage %lld von %lld"
+          }
+        }
+      }
+    },
     "Deep" : {
       "localizations" : {
         "de" : {
@@ -1031,6 +1061,46 @@
         }
       }
     },
+    "Imported %lld · Already there %lld · Failed %lld" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importiert %lld · Schon vorhanden %lld · Fehlgeschlagen %lld"
+          }
+        }
+      }
+    },
+    "Import finished." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import abgeschlossen."
+          }
+        }
+      }
+    },
+    "Import cancelled." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import abgebrochen."
+          }
+        }
+      }
+    },
+    "Importing from Garmin Connect %lld%%" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import aus Garmin Connect: %lld %%"
+          }
+        }
+      }
+    },
     "Incident detection" : {
       "localizations" : {
         "de" : {
@@ -1077,6 +1147,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Runden"
+          }
+        }
+      }
+    },
+    "Last failure: %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Letzter Fehler: %@"
           }
         }
       }
@@ -1347,6 +1427,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ausstehend"
+          }
+        }
+      }
+    },
+    "Time left: %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verbleibende Zeit: %@"
           }
         }
       }

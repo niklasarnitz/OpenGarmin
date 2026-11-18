@@ -47,6 +47,17 @@ enum BackendRequests {
         try json("POST", base, "batches", token: token, Batch(key: key, source: source.rawValue, batch: batch))
     }
 
+    /// A raw Garmin Connect response, sent unchanged as the `body` of `{key, endpoint, day, fetchedAt, body}`.
+    static func connectRaw(_ base: URL, token: String?, key: String, endpoint: String, day: String, fetchedAt: Date,
+                           body: Any) throws -> URLRequest {
+        let payload: [String: Any] = [
+            "key": key, "endpoint": endpoint, "day": day,
+            "fetchedAt": ISO8601DateFormatter().string(from: fetchedAt), "body": body,
+        ]
+        return request("POST", base, "connect/raw", token: token, body: try JSONSerialization.data(withJSONObject: payload),
+                       contentType: "application/json")
+    }
+
     /// A chunk of Apple Health items under its key, as `{key, items}`.
     static func healthKit<T: Encodable>(_ base: URL, token: String?, path: String, key: String, items: [T]) throws -> URLRequest {
         try json("POST", base, path, token: token, HealthKitChunk(key: key, items: items))

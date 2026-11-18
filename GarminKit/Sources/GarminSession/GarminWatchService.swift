@@ -289,6 +289,22 @@ public final class GarminWatchService: WatchService {
         await importer.isKnown(key)
     }
 
+    /// Whether a check of this key found nothing to import.
+    public func wasChecked(_ key: String) async -> Bool {
+        await importer.wasChecked(key)
+    }
+
+    /// Imports one day of Garmin Connect data in one step: its batches under their keys, and the keys whose check found
+    /// nothing, so the next import does not ask Garmin for them again.
+    public func importDay(_ batches: [(key: String, batch: HealthBatch)], checked: [String]) async throws {
+        try await importer.acceptDay(batches, checked: checked)
+    }
+
+    /// Whether the history holds the watch's copy of an activity: the same id, or a start within a minute.
+    public func hasActivity(id: String, starting start: Date) async -> Bool {
+        await importer.hasActivity(id: id, starting: start)
+    }
+
     /// Imports a FIT file that did not come from the watch, such as an activity's original file from Garmin Connect.
     /// It goes through the watch's import stage, so it reaches Health the same way the watch's files do.
     public func importFITFile(_ bytes: Data, key: String) async throws {

@@ -64,6 +64,29 @@ actor FITImporter {
         history.isImported(fileKey) || FileManager.default.fileExists(atPath: history.inboxFile(for: fileKey).path)
     }
 
+    /// Whether a check of this key found nothing to import (see `markChecked`).
+    func wasChecked(_ fileKey: String) -> Bool {
+        history.isImported(HistoryStore.checkedKey(fileKey))
+    }
+
+    /// Merges one day of Garmin Connect data into the history in one commit: each batch under its own key (kept in
+    /// `Batches/` for the backend upload), and the keys whose check found nothing. One `.imported` event covers the day.
+    func acceptDay(_ batches: [(key: String, batch: HealthBatch)], checked: [String]) throws {
+        for item in batches { try history.saveBatch(item.batch, fileKey: item.key) }
+        let entries = batches.map { HistoryStore.Entry(key: $0.key, batch: $0.batch) }
+            + checked.map { HistoryStore.Entry(key: HistoryStore.checkedKey($0), batch: HealthBatch()) }
+        try history.commit(entries)
+        guard !batches.isEmpty else { return }
+        var health = HealthBatch()
+        for item in batches { health.merge(Self.healthPart(of: item.key, item.batch)) }
+        report(.imported(health, history: history.history))
+    }
+
+    /// Whether the history holds an activity with this id, or one that started within a minute of `start`.
+    func hasActivity(id: String, starting start: Date) -> Bool {
+        history.history.activities.contains { $0.id == id || abs($0.start.timeIntervalSince(start)) <= 60 }
+    }
+
     /// Starts a run, unless one is going. Called at launch, on connect and after each accepted file.
     func start() {
         guard !running else { return }

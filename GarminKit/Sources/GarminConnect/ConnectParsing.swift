@@ -176,6 +176,21 @@ enum ConnectParsing {
         return PointSample(date: end, value: value)
     }
 
+    /// The resting heart rate the sleep response carries, which the daily summary otherwise gives. Nil when it has none.
+    static func sleepRestingHeartRate(_ data: Data) -> Double? {
+        guard let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let value = number(json["restingHeartRate"]), value > 0 else { return nil }
+        return value
+    }
+
+    /// The average overnight HRV the sleep response carries, dated at the end of the sleep. Nil when it has none.
+    static func sleepHRV(_ data: Data) -> PointSample? {
+        guard let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let value = number(json["avgOvernightHrv"]), value > 0,
+              let endMs = number((json["dailySleepDTO"] as? [String: Any])?["sleepEndTimestampGMT"]) else { return nil }
+        return PointSample(date: date(milliseconds: endMs), value: value)
+    }
+
     /// The display name of the signed-in account, which the per-user paths are built from.
     static func displayName(_ data: Data) throws -> String {
         let json = try jsonObject(data)
