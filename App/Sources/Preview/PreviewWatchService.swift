@@ -84,6 +84,29 @@ final class PreviewWatchService: WatchService {
     func updateProfile(_ profile: UserProfile) async throws { try await simulateRoundTrip() }
     func setTime() async throws { try await simulateRoundTrip() }
 
+    var alarmSlots: Int { 10 }
+
+    func settingsScreen(_ id: UInt32) async throws -> WatchSettingsScreen {
+        try await simulateRoundTrip()
+        return WatchSettingsScreen(id: id, title: "Watch settings", rows: [
+            WatchSettingsRow(id: "1", entryID: 1, title: "Display", summary: nil, isEnabled: true, control: .category),
+            WatchSettingsRow(id: "2", entryID: 2, title: "Do not disturb", summary: nil, isEnabled: true,
+                             control: .toggle(isOn: false)),
+            WatchSettingsRow(id: "3", entryID: 3, title: "Backlight", summary: "On", isEnabled: true,
+                             control: .choice(options: ["Off", "On"], selected: 1)),
+            WatchSettingsRow(id: "4", entryID: 4, title: "Brightness", summary: "50%", isEnabled: true,
+                             control: .integer(value: 50, range: 0...100, unit: "%")),
+            WatchSettingsRow(id: "5", entryID: 5, title: "Reset", summary: nil, isEnabled: false, control: .action),
+        ])
+    }
+
+    func changeSetting(screen: UInt32, entryID: UInt32, _ change: WatchSettingChange) async throws -> WatchSettingsOutcome {
+        try await simulateRoundTrip()
+        return .refresh
+    }
+
+    func setAlarms(_ alarms: [WatchAlarm]) async throws { try await simulateRoundTrip() }
+
     private func simulateRoundTrip() async throws {
         try await Task.sleep(for: .milliseconds(500))
     }

@@ -56,6 +56,9 @@ final class GFDISession {
     private var calendarEvents: [CalendarEvent] = []
     /// Notifications the app has sent and the watch still shows. Managed in GFDISession+Notifications.swift.
     var notifications: [Int32: PhoneNotification] = [:]
+    /// The settings screen read and the settings change in flight, managed in GFDISession+Settings.swift.
+    var settingsRead: SettingsRead?
+    var settingsChange: SettingsChange?
     private var reassembler = GFDIProtobufReassembler()
     private var protobufRequestID: UInt16 = 0
 
@@ -149,6 +152,7 @@ final class GFDISession {
         legacyFirst = false
         pendingItems = []
         currentItem = nil
+        failSettings(GarminWatchError.notConnected)
     }
 
     // MARK: - Receiving
@@ -237,6 +241,7 @@ final class GFDISession {
         await send(GFDISystemEvent(.timeUpdated))
         await send(GFDISystemEvent(.syncReady))
         try? await sendProtobufRequest(Self.batteryStatusRequest())
+        if watchCapabilities.contains(.realtimeSettings) { await initSettings() }
         for kind in [GFDISystemEvent.Kind.pairComplete, .syncComplete, .setupWizardComplete] {
             await send(GFDISystemEvent(kind))
         }
@@ -773,12 +778,15 @@ final class GFDISession {
         if smart.hasFileAccessService {
             await receiveFileAccess(smart.fileAccessService, requestID: chunk.requestID)
         }
+        if smart.hasRealtimeSettingsService {
+            receiveRealtimeSettings(smart.realtimeSettingsService)
+        }
         if let reply = http.reply(to: smart) {
             await sendProtobufResponse(reply, requestID: chunk.requestID)
         }
     }
 
-    private func sendProtobufRequest(_ smart: GarminVivomovehr_Smart) async throws {
+    func sendProtobufRequest(_ smart: GarminVivomovehr_Smart) async throws {
         protobufRequestID &+= 1
         for chunk in try Self.chunks(smart, requestID: protobufRequestID, maxPacketSize: maxPacketSize) {
             try await transmit(GFDIProtobufRequest(chunk: chunk))
