@@ -1,0 +1,99 @@
+import SwiftUI
+import GarminModels
+
+struct WorkoutsView: View {
+    @Environment(AppEnvironment.self) private var app
+
+    @State private var plans = PreviewData.plans
+    @State private var isBuilding = false
+    @State private var sendingPlanID: UUID?
+    @State private var sentPlanID: UUID?
+    @State private var sendCount = 0
+    @State private var sendError: String?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if plans.isEmpty {
+                    ContentUnavailableView {
+                        Label("No workouts", systemImage: "list.bullet.clipboard")
+                    } description: {
+                        Text("Build a workout and send it to your watch.")
+                    } actions: {
+                        Button("New workout") { isBuilding = true }
+                            .buttonStyle(.glassProminent)
+                    }
+                } else {
+                    List {
+                        ForEach(plans) { plan in
+                            row(plan)
+                        }
+                        .onDelete { plans.remove(atOffsets: $0) }
+                    }
+                }
+            }
+            .navigationTitle("Workouts")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("New workout", systemImage: "plus") { isBuilding = true }
+                }
+            }
+            .sheet(isPresented: $isBuilding) {
+                WorkoutBuilderView { plans.append($0) }
+            }
+            .sensoryFeedback(.success, trigger: sendCount)
+            .alert("Couldn't send the workout", isPresented: Binding(
+                get: { sendError != nil },
+                set: { if !$0 { sendError = nil } })
+            ) {} message: {
+                Text(sendError ?? "")
+            }
+        }
+    }
+
+    private func row(_ plan: WorkoutPlan) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: plan.sport.symbol)
+                .font(.title3)
+                .foregroundStyle(plan.sport.tint)
+                .frame(width: 44, height: 44)
+                .background(plan.sport.tint.opacity(0.15), in: .circle)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(plan.name)
+                    .font(.headline)
+                Text("\(plan.sport.title), \(plan.steps.count) steps")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button {
+                send(plan)
+            } label: {
+                if sendingPlanID == plan.id {
+                    ProgressView()
+                } else if sentPlanID == plan.id {
+                    Image(systemName: "checkmark")
+                } else {
+                    Label("Send", systemImage: "paperplane.fill")
+                }
+            }
+            .buttonStyle(.glass)
+            .disabled(sendingPlanID != nil)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func send(_ plan: WorkoutPlan) {
+        sendingPlanID = plan.id
+        Task {
+            do {
+                try await app.watch.sendWorkout(plan)
+                sentPlanID = plan.id
+                sendCount += 1
+            } catch {
+                sendError = error.localizedDescription
+            }
+            sendingPlanID = nil
+        }
+    }
+}
