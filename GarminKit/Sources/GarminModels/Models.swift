@@ -363,6 +363,22 @@ public struct CalendarEvent: Sendable, Codable, Hashable {
     }
 }
 
+/// Notification categories the watch can show an icon for. The raw values are Garmin's category bytes.
+public enum PhoneNotificationCategory: UInt8, Sendable, Codable, Hashable, CaseIterable {
+    case other, incomingCall, missedCall, voicemail, social, schedule, email, news
+    case healthAndFitness, businessAndFinance, location, entertainment, sms
+}
+
+/// A button the watch shows under a phone notification. A negative action dismisses the notification on the watch;
+/// a positive one reports the choice back to the app.
+public struct PhoneNotificationAction: Sendable, Codable, Hashable {
+    public var title: String
+    public var isNegative: Bool
+    public init(title: String, isNegative: Bool = false) {
+        self.title = title; self.isNegative = isNegative
+    }
+}
+
 /// A notification the app itself pushes over GFDI (in addition to iOS ANCS which the watch reads directly).
 public struct PhoneNotification: Sendable, Codable, Hashable {
     public var id: Int
@@ -371,9 +387,13 @@ public struct PhoneNotification: Sendable, Codable, Hashable {
     public var subtitle: String?
     public var body: String
     public var date: Date
-    public init(id: Int, appIdentifier: String, title: String, subtitle: String? = nil, body: String, date: Date) {
+    public var category: PhoneNotificationCategory
+    /// At most five positive actions, which the watch numbers 1 to 5, and any number of negative ones.
+    public var actions: [PhoneNotificationAction]
+    public init(id: Int, appIdentifier: String, title: String, subtitle: String? = nil, body: String, date: Date,
+                category: PhoneNotificationCategory = .other, actions: [PhoneNotificationAction] = []) {
         self.id = id; self.appIdentifier = appIdentifier; self.title = title; self.subtitle = subtitle
-        self.body = body; self.date = date
+        self.body = body; self.date = date; self.category = category; self.actions = actions
     }
 }
 

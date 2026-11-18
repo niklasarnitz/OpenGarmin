@@ -44,6 +44,8 @@ public struct NearbyWatch: Sendable, Hashable, Identifiable {
 
 public enum WatchEvent: Sendable {
     case findMyPhone(started: Bool)
+    /// The watch chose a positive action of a notification the app sent. `actionIndex` is 0-based into its `actions`.
+    case notificationAction(id: Int, actionIndex: Int)
     case healthBatchImported(HealthBatch)
     case battery(BatteryStatus)
     case log(String)
