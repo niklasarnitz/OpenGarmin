@@ -19,13 +19,15 @@ public struct DailySummary: Sendable, Codable, Hashable, Identifiable {
     public var id: Date { day }
 }
 
-/// The history on disk: the samples of the retention period, every imported activity, one summary per day, the keys
+/// The history on disk: the samples of the retention period (a year for stress and Body Battery), every imported activity, one summary per day, the keys
 /// of the files already imported, and the raw FIT files. Only the import stage (`FITImporter`) owns and writes it, so
 /// it never runs on the main actor. Layout under `directory`: `history.json`, `Inbox/` (files waiting for import) and
 /// `FIT/` (imported files).
 struct HistoryStore {
     /// Samples older than this are dropped from the history. Activities and their records are kept.
     static let retention: TimeInterval = 30 * 24 * 3600
+    /// Stress and Body Battery are kept a year: Apple Health has no type for them, so the history is their only home.
+    static let dailyRetention: TimeInterval = 365 * 24 * 3600
 
     struct Snapshot: Codable {
         var history = HealthBatch()
@@ -68,7 +70,8 @@ struct HistoryStore {
         var batch = HealthBatch()
         for entry in entries { batch.merge(entry.batch) }
         var next = snapshot
-        var history = Self.merged(next.history, with: batch, cutoff: now.addingTimeInterval(-Self.retention))
+        var history = Self.merged(next.history, with: batch, cutoff: now.addingTimeInterval(-Self.retention),
+                                  dailyCutoff: now.addingTimeInterval(-Self.dailyRetention))
         history.activities.sort { $0.start < $1.start }
         next.history = history
         next.days = dailySummaries(for: history)
@@ -118,7 +121,7 @@ struct HistoryStore {
 
     // MARK: - Merging
 
-    static func merged(_ base: HealthBatch, with new: HealthBatch, cutoff: Date) -> HealthBatch {
+    static func merged(_ base: HealthBatch, with new: HealthBatch, cutoff: Date, dailyCutoff: Date) -> HealthBatch {
         var out = HealthBatch()
         out.heartRate = union(base.heartRate, new.heartRate).filter { $0.date >= cutoff }
         out.restingHeartRate = union(base.restingHeartRate, new.restingHeartRate).filter { $0.date >= cutoff }
@@ -128,8 +131,8 @@ struct HistoryStore {
         out.distance = union(base.distance, new.distance).filter { $0.end >= cutoff }
         out.floorsClimbed = union(base.floorsClimbed, new.floorsClimbed).filter { $0.end >= cutoff }
         out.intensityMinutes = union(base.intensityMinutes, new.intensityMinutes).filter { $0.end >= cutoff }
-        out.stress = union(base.stress, new.stress).filter { $0.date >= cutoff }
-        out.bodyBattery = union(base.bodyBattery, new.bodyBattery).filter { $0.date >= cutoff }
+        out.stress = union(base.stress, new.stress).filter { $0.date >= dailyCutoff }
+        out.bodyBattery = union(base.bodyBattery, new.bodyBattery).filter { $0.date >= dailyCutoff }
         out.spo2 = union(base.spo2, new.spo2).filter { $0.date >= cutoff }
         out.respirationRate = union(base.respirationRate, new.respirationRate).filter { $0.date >= cutoff }
         out.hrv = union(base.hrv, new.hrv).filter { $0.date >= cutoff }

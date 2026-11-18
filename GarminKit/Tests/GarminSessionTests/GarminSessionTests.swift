@@ -714,3 +714,21 @@ private extension Array where Element == GFDISessionOutput {
     let marked = services.filter(\.hasModifyFlagsRequest).map(\.modifyFlagsRequest.uid.leastSignificant)
     #expect(marked == [1, 2])
 }
+
+@MainActor
+@Test func historyKeepsStressAndBodyBatteryForAYearAndOtherSamplesFor30Days() throws {
+    let store = try makeStore()
+    var history = HistoryStore(directory: store.directory)
+    let now = Date(timeIntervalSince1970: 2_000_000_000)
+    let days = { (count: Double) in now.addingTimeInterval(-count * 86_400) }
+    var batch = HealthBatch()
+    // 100 days old: past the 30-day window, inside the year.
+    batch.stress = [PointSample(date: days(100), value: 40), PointSample(date: days(370), value: 41)]
+    batch.bodyBattery = [PointSample(date: days(100), value: 60), PointSample(date: days(370), value: 61)]
+    batch.heartRate = [HeartRateSample(date: days(100), bpm: 70), HeartRateSample(date: days(29), bpm: 71)]
+    try history.commit([HistoryStore.Entry(key: "a", batch: batch)], now: now)
+
+    #expect(history.history.stress.map(\.value) == [40])
+    #expect(history.history.bodyBattery.map(\.value) == [60])
+    #expect(history.history.heartRate.map(\.bpm) == [71])
+}
