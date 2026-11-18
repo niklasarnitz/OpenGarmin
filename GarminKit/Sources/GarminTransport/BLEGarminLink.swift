@@ -42,7 +42,9 @@ public final class BLEGarminLink: NSObject, GarminServiceLink {
 
     private var connectContinuation: CheckedContinuation<Void, Error>?
     private var watchdog: Task<Void, Never>?
-    private var retransmitTask: Task<Void, Never>?
+    /// Per-handle MLR timers: the batched acknowledgement and the retransmission timeout.
+    private var ackTimers: [UInt8: Task<Void, Never>] = [:]
+    private var retransmitTimers: [UInt8: Task<Void, Never>] = [:]
 
     /// Long enough for the user to answer iOS's pairing dialog.
     private static let handshakeTimeout: Duration = .seconds(60)
@@ -109,7 +111,6 @@ public final class BLEGarminLink: NSObject, GarminServiceLink {
         let encoded = Cobs.encode(gfdiFrame)
         if let handle = gfdiHandle {
             for packet in queue(encoded, on: handle) { write(packet) }
-            scheduleRetransmit()
         } else {
             // V1 and V0 have no packet header, so the whole write is payload.
             for chunk in chunked(encoded, size: maxWrite) { write(chunk) }
@@ -122,8 +123,9 @@ public final class BLEGarminLink: NSObject, GarminServiceLink {
     private func end(in newState: LinkState) {
         watchdog?.cancel()
         watchdog = nil
-        retransmitTask?.cancel()
-        retransmitTask = nil
+        (Array(ackTimers.values) + Array(retransmitTimers.values)).forEach { $0.cancel() }
+        ackTimers = [:]
+        retransmitTimers = [:]
         channels = [:]
         gfdiHandle = nil
         serviceSinks.values.forEach { $0.finish() }
@@ -225,6 +227,12 @@ public final class BLEGarminLink: NSObject, GarminServiceLink {
         let received = mlr.receive(data)
         channels[handle] = mlr
         for packet in received.outgoing { write(packet) }
+        switch received.ack {
+        case .delayed: startAckTimer(handle)
+        case .sent: ackTimers.removeValue(forKey: handle)?.cancel()
+        case .none: break
+        }
+        if received.acknowledgedNew { restartRetransmitTimer(handle) }
         for message in received.messages {
             if handle == gfdiHandle {
                 deliver(decoder.feed(message))
@@ -232,7 +240,6 @@ public final class BLEGarminLink: NSObject, GarminServiceLink {
                 serviceSinks[handle]?.yield(message)
             }
         }
-        scheduleRetransmit()
     }
 
     /// Replies on handle 0: the GFDI handshake, and the file transfer services the watch opens or closes.
@@ -260,6 +267,8 @@ public final class BLEGarminLink: NSObject, GarminServiceLink {
             }
         case let .closeHandle(service, handle)? where handle != gfdiHandle:
             channels[handle] = nil
+            ackTimers.removeValue(forKey: handle)?.cancel()
+            retransmitTimers.removeValue(forKey: handle)?.cancel()
             openServices.remove(service)
             serviceSinks.removeValue(forKey: handle)?.finish()
         default:
@@ -286,32 +295,48 @@ public final class BLEGarminLink: NSObject, GarminServiceLink {
         }
     }
 
-    /// Queues a message on an MLR handle and returns the packets that fit its window now.
+    /// Queues a message on an MLR handle and returns the packets that fit its window now. Starts the
+    /// retransmission timer when these are the first packets in flight.
     private func queue(_ message: Data, on handle: UInt8) -> [Data] {
         guard var mlr = channels[handle] else { return [] }
+        let wasIdle = mlr.unacknowledgedCount == 0
         let packets = mlr.send(message)
         channels[handle] = mlr
+        if wasIdle, mlr.unacknowledgedCount > 0 { restartRetransmitTimer(handle) }
         return packets
     }
 
     /// Sends a raw payload on a file transfer service. Service payloads are not COBS-framed.
     func sendService(_ payload: Data, on handle: UInt8) {
         for packet in queue(payload, on: handle) { write(packet) }
-        scheduleRetransmit()
     }
 
-    /// Resends unacknowledged MLR packets once a second until the watch has acknowledged everything.
-    private func scheduleRetransmit() {
-        guard retransmitTask == nil, channels.values.contains(where: { $0.unacknowledgedCount > 0 }) else { return }
-        retransmitTask = Task { [weak self] in
-            while true {
-                guard (try? await Task.sleep(for: .seconds(1))) != nil,
-                      let self, self.channels.values.contains(where: { $0.unacknowledgedCount > 0 }) else { break }
-                for channel in self.channels.values {
-                    for packet in channel.retransmit() { self.write(packet) }
-                }
-            }
-            self?.retransmitTask = nil
+    /// Acknowledges the watch's packets after `MLRChannel.ackDelay`, unless an acknowledgement goes out first.
+    private func startAckTimer(_ handle: UInt8) {
+        ackTimers[handle]?.cancel()
+        ackTimers[handle] = Task { [weak self] in
+            guard (try? await Task.sleep(for: MLRChannel.ackDelay)) != nil,
+                  let self, var mlr = self.channels[handle] else { return }
+            let ack = mlr.ackTimedOut()
+            self.channels[handle] = mlr
+            self.ackTimers[handle] = nil
+            self.write(ack)
+        }
+    }
+
+    /// Restarts the handle's retransmission timer, or stops it when nothing is in flight. On expiry the channel backs
+    /// off, resends what is unacknowledged, and the timer runs again with the longer timeout.
+    private func restartRetransmitTimer(_ handle: UInt8) {
+        retransmitTimers.removeValue(forKey: handle)?.cancel()
+        guard let mlr = channels[handle], mlr.unacknowledgedCount > 0 else { return }
+        let timeout = mlr.retransmissionTimeout
+        retransmitTimers[handle] = Task { [weak self] in
+            guard (try? await Task.sleep(for: timeout)) != nil,
+                  let self, var mlr = self.channels[handle] else { return }
+            let packets = mlr.retransmissionTimedOut()
+            self.channels[handle] = mlr
+            for packet in packets { self.write(packet) }
+            self.restartRetransmitTimer(handle)
         }
     }
 

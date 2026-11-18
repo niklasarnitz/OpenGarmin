@@ -43,19 +43,40 @@ struct MLRPacket: Equatable, Sendable {
 
 /// Sans-IO reliable sender and receiver for one MLR handle, following Gadgetbridge's MlrCommunicator.
 ///
-/// The caller writes the returned packets, feeds every inbound packet to `receive`, and calls `retransmit`
-/// on a timer while `unacknowledgedCount > 0`. Differences from Gadgetbridge: the send window is fixed
-/// (no backoff), and every in-sequence data packet is acknowledged at once instead of batched.
+/// The caller writes the returned packets and feeds every inbound packet to `receive`. It also runs two timers:
+/// - the acknowledgement timer: when `receive` returns `ack == .delayed`, call `ackTimedOut()` after `ackDelay`
+///   unless a later `receive` returns `.sent` first. Acknowledgements are batched: one goes out immediately only
+///   once `ackThreshold` packets are unacknowledged or a packet arrives out of sequence.
+/// - the retransmission timer: (re)start it with `retransmissionTimeout` when `send` puts the first packet in
+///   flight or `receive` returns `acknowledgedNew`, stop it when nothing is in flight, and call
+///   `retransmissionTimedOut()` when it fires. Each timeout doubles the timeout (up to 20 s) and halves the send
+///   window; any new acknowledgement resets both.
 struct MLRChannel: Sendable {
+    enum AckAction: Equatable, Sendable {
+        /// Nothing to acknowledge (no data arrived).
+        case none
+        /// An acknowledgement is in `outgoing`; cancel a pending acknowledgement timer.
+        case sent
+        /// (Re)start the acknowledgement timer.
+        case delayed
+    }
+
     struct Received: Equatable, Sendable {
         /// In-order payloads from the peer. Each is a piece of a COBS-encoded GFDI frame.
         var messages: [Data] = []
         /// Packets to write: acknowledgements, and queued data that the acknowledgements made room for.
         var outgoing: [Data] = []
+        var ack: AckAction = .none
+        /// The peer acknowledged packets this side sent; restart the retransmission timer.
+        var acknowledgedNew = false
     }
 
     static let sequenceModulus: UInt8 = 64
-    static let windowSize = 32
+    static let maxWindow = 32
+    static let ackThreshold = 5
+    static let ackDelay: Duration = .milliseconds(20)
+    static let initialRetransmissionTimeout: Duration = .seconds(1)
+    static let maxRetransmissionTimeout: Duration = .seconds(20)
 
     let handle: UInt8
     /// Payload bytes per packet: the write size minus the 2-byte header.
@@ -64,10 +85,16 @@ struct MLRChannel: Sendable {
     private var inFlight: [Sent] = []
     private var nextSendSeq: UInt8 = 0
     private var nextRecvSeq: UInt8 = 0
+    /// The reqNum of the last acknowledgement-only packet sent.
+    private var lastSentAck: UInt8 = 0
+    private(set) var window = MLRChannel.maxWindow
+    private(set) var retransmissionTimeout = MLRChannel.initialRetransmissionTimeout
 
     private struct Sent: Sendable {
         let seq: UInt8
         let payload: Data
+        /// The reqNum the packet carried when first sent; retransmissions repeat it, as Gadgetbridge does.
+        let reqNum: UInt8
     }
 
     /// - Parameter maxWrite: the largest BLE write, header included.
@@ -85,52 +112,73 @@ struct MLRChannel: Sendable {
         return transmit()
     }
 
-    /// Everything unacknowledged, stamped with the current ack.
-    func retransmit() -> [Data] {
-        inFlight.map { packet($0.seq, $0.payload) }
-    }
-
     /// Handles one inbound packet. Packets for another handle, or without the MLR flag, are ignored.
     mutating func receive(_ data: Data) -> Received {
         guard let packet = MLRPacket(decoding: data), packet.handle == handle else { return Received() }
-        acknowledge(upTo: packet.reqNum)
         var result = Received()
+        result.acknowledgedNew = acknowledge(upTo: packet.reqNum)
         if !packet.payload.isEmpty {
             if packet.seqNum == nextRecvSeq {
                 nextRecvSeq = (nextRecvSeq + 1) % Self.sequenceModulus
                 result.messages.append(packet.payload)
+                let unacknowledged = Self.distance(from: lastSentAck, to: nextRecvSeq)
+                if unacknowledged >= Self.ackThreshold {
+                    result.outgoing.append(makeAck())
+                    result.ack = .sent
+                } else {
+                    result.ack = .delayed
+                }
+            } else {
+                // The sender should not send these; acknowledge the expected number again so it retransmits.
+                result.outgoing.append(makeAck())
+                result.ack = .sent
             }
-            // Out-of-sequence packets are re-acked with the sequence number still expected.
-            result.outgoing.append(ackPacket)
         }
         result.outgoing += transmit()
         return result
     }
 
-    private var ackPacket: Data {
-        MLRPacket(handle: handle, reqNum: nextRecvSeq, seqNum: 0).encoded()
+    /// The acknowledgement timer fired: acknowledge everything received so far.
+    mutating func ackTimedOut() -> Data {
+        makeAck()
     }
 
-    private func packet(_ seq: UInt8, _ payload: Data) -> Data {
-        MLRPacket(handle: handle, reqNum: nextRecvSeq, seqNum: seq, payload: payload).encoded()
+    /// The retransmission timer fired: back off and resend everything unacknowledged.
+    mutating func retransmissionTimedOut() -> [Data] {
+        retransmissionTimeout = min(retransmissionTimeout * 2, Self.maxRetransmissionTimeout)
+        window = max(1, window / 2)
+        return inFlight.map { MLRPacket(handle: handle, reqNum: $0.reqNum, seqNum: $0.seq, payload: $0.payload).encoded() }
+    }
+
+    private mutating func makeAck() -> Data {
+        lastSentAck = nextRecvSeq
+        return MLRPacket(handle: handle, reqNum: nextRecvSeq, seqNum: 0).encoded()
     }
 
     private mutating func transmit() -> [Data] {
         var out: [Data] = []
-        while !queue.isEmpty, inFlight.count < Self.windowSize {
+        while !queue.isEmpty, inFlight.count < window {
             let payload = queue.removeFirst()
-            out.append(packet(nextSendSeq, payload))
-            inFlight.append(Sent(seq: nextSendSeq, payload: payload))
+            out.append(MLRPacket(handle: handle, reqNum: nextRecvSeq, seqNum: nextSendSeq, payload: payload).encoded())
+            inFlight.append(Sent(seq: nextSendSeq, payload: payload, reqNum: nextRecvSeq))
             nextSendSeq = (nextSendSeq + 1) % Self.sequenceModulus
         }
         return out
     }
 
-    /// Drops every packet the peer's `reqNum` covers. A reqNum that acks nothing new, or more than is in flight, is ignored.
-    private mutating func acknowledge(upTo reqNum: UInt8) {
+    /// Drops every packet the peer's `reqNum` covers and recovers from a backoff. A reqNum that acks nothing new,
+    /// or more than is in flight, is ignored. Returns whether anything was acknowledged.
+    private mutating func acknowledge(upTo reqNum: UInt8) -> Bool {
         let oldest = inFlight.first?.seq ?? nextSendSeq
-        let count = (Int(reqNum) - Int(oldest) + Int(Self.sequenceModulus)) % Int(Self.sequenceModulus)
-        guard count > 0, count <= inFlight.count else { return }
+        let count = Self.distance(from: oldest, to: reqNum)
+        guard count > 0, count <= inFlight.count else { return false }
         inFlight.removeFirst(count)
+        retransmissionTimeout = Self.initialRetransmissionTimeout
+        window = min(window + count, Self.maxWindow)
+        return true
+    }
+
+    private static func distance(from a: UInt8, to b: UInt8) -> Int {
+        (Int(b) - Int(a) + Int(sequenceModulus)) % Int(sequenceModulus)
     }
 }
