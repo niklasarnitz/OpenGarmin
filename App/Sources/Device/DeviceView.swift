@@ -4,6 +4,7 @@ import GarminSession
 
 struct DeviceView: View {
     @Environment(AppEnvironment.self) private var app
+    @Environment(\.openURL) private var openURL
     @AppStorage("feature.weather") private var weatherOn = true
     @AppStorage("feature.calendar") private var calendarOn = true
     @AppStorage("feature.notifications") private var notificationsOn = true
@@ -29,6 +30,7 @@ struct DeviceView: View {
                 faceCard(watch)
                 connection(watch)
                 features
+                notifications(watch)
                 information(watch)
                 Button("Forget watch", systemImage: "trash", role: .destructive) { confirmForget = true }
                     .buttonStyle(.glass)
@@ -107,9 +109,6 @@ struct DeviceView: View {
                 }
             }
             Toggle("Notifications", systemImage: "bell.fill", isOn: $notificationsOn)
-            Text("Notifications reach the watch through iOS. Turn on Share System Notifications for the watch in Settings, Bluetooth.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
         }
         .onChange(of: weatherOn) { _, on in
             if on { Task { try? await PhoneSync.pushWeather(to: app.watch) } }
@@ -119,6 +118,45 @@ struct DeviceView: View {
                 if on { _ = await CalendarSync.requestAccess() }
                 try? await CalendarSync.push(to: app.watch)
             }
+        }
+    }
+
+    /// iPhone notifications reach the watch through iOS (ANCS), which needs the bonded link and the system setting below.
+    private func notifications(_ watch: PairedWatch) -> some View {
+        MetricTile("Notifications", symbol: "bell.badge.fill", tint: Palette.blaze) {
+            LabeledContent("Bonded", value: Self.isLinked(app.watch.state) ? "Connected" : "Not confirmed")
+            Text("iOS does not tell apps whether the watch is bonded. OpenGarmin counts it as bonded while the watch is connected, because the connection asks iOS to pair.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Text("To show iPhone notifications on the watch, open Settings, Bluetooth, \(Formatting.deviceName(watch.catalogID)), and turn on Share System Notifications.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 10) {
+                Button("Open Settings", systemImage: "gear") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                }
+                .buttonStyle(.glass)
+                Button("Send test", systemImage: "paperplane.fill") {
+                    Task {
+                        try? await app.watch.sendNotification(PhoneNotification(
+                            id: Int(Date.now.timeIntervalSince1970), appIdentifier: "OpenGarmin",
+                            title: "OpenGarmin test", body: "Notifications from OpenGarmin reach your watch.",
+                            date: .now, category: .other
+                        ))
+                    }
+                }
+                .buttonStyle(.glassProminent)
+                .disabled(!Self.isLinked(app.watch.state))
+            }
+            .labelStyle(.iconOnly)
+            .controlSize(.regular)
+        }
+    }
+
+    private static func isLinked(_ state: WatchConnectionState) -> Bool {
+        switch state {
+        case .connected, .syncing: true
+        default: false
         }
     }
 

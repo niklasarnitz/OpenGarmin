@@ -30,17 +30,22 @@ final class AppEnvironment {
         // State restoration only works when the central exists before launch finishes.
         if watch.pairedWatch != nil { GarminBluetooth.activate() }
         let environment = AppEnvironment(watch: watch)
-        environment.mirrorImportsToHealth()
+        environment.handleWatchEvents()
         CalendarSync.pushChanges(to: watch)
         return environment
     }
 
-    /// Writes every batch the watch imports to Apple Health. Runs for the life of the app.
-    private func mirrorImportsToHealth() {
+    /// Writes every batch the watch imports to Apple Health and raises the find-my-phone alert. Runs for the life of
+    /// the app. It is the only consumer of `watch.events`, because an AsyncStream delivers each event once.
+    private func handleWatchEvents() {
         let watch = self.watch
         let writer = HealthKitWriter()
         Task {
             for await event in watch.events {
+                if case let .findMyPhone(started) = event {
+                    FindMyPhoneAlert.update(started: started)
+                    continue
+                }
                 guard case let .healthBatchImported(batch) = event else { continue }
                 let paired = watch.pairedWatch
                 _ = try? await writer.save(

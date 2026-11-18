@@ -41,13 +41,14 @@ final class GFDISession {
     /// The catalog's choice for this model. nil when the catalog does not know the model.
     private let newSyncProtocol: Bool?
     private let weatherProvider: (@MainActor () async -> WeatherReport?)?
-    private let output: @MainActor (GFDISessionOutput) -> Void
+    let output: @MainActor (GFDISessionOutput) -> Void
 
     private var deviceInfo: DeviceInfo?
     private var maxPacketSize = GFDISession.defaultMaxPacketSize
     private var watchCapabilities: Set<GarminCapability> = []
     private var calendarEvents: [CalendarEvent] = []
-    private var notifications: [Int32: PhoneNotification] = [:]
+    /// Notifications the app has sent and the watch still shows. Managed in GFDISession+Notifications.swift.
+    var notifications: [Int32: PhoneNotification] = [:]
     private var reassembler = GFDIProtobufReassembler()
     private var protobufRequestID: UInt16 = 0
 
@@ -56,6 +57,8 @@ final class GFDISession {
     private var download: Download?
     private var syncTotal = 0
     private var syncDone = 0
+    /// Activities imported by the current sync, reported to the watch as a notification when it ends.
+    private var syncedActivities = 0
     private var upload: Upload?
 
     // New sync protocol: the files are listed and pulled as protobuf messages, and their bytes arrive on a file transfer service.
@@ -240,55 +243,6 @@ final class GFDISession {
         try await transmit(GFDIFitData(data: payload.data))
     }
 
-    func sendNotification(_ notification: PhoneNotification) async throws {
-        let key = Int32(truncatingIfNeeded: notification.id)
-        let kind: GFDINotificationUpdate.Kind = notifications[key] == nil ? .add : .modify
-        notifications[key] = notification
-        try await transmit(GFDINotificationUpdate(
-            kind: kind, flags: [.foreground], category: .other,
-            count: UInt8(min(notifications.count, 255)), notificationID: key, phoneFlags: []
-        ))
-    }
-
-    /// The watch asked for the text of a notification it was told about. The text goes out as NOTIFICATION_DATA.
-    private func receiveNotificationControl(_ message: GFDINotificationControl) async {
-        await send(message.acknowledgement())
-        guard case let .notificationAttributes(id, attributes) = message.request,
-              let notification = notifications[id] else { return }
-
-        var writer = ByteWriter()
-        writer.writeUInt8(0) // GET_NOTIFICATION_ATTRIBUTES
-        writer.writeInt32(id)
-        for requested in attributes {
-            var value = Array(Self.attributeText(requested.attribute, of: notification).utf8)
-            if requested.maxLength > 0 { value = Array(value.prefix(Int(requested.maxLength))) }
-            writer.writeUInt8(requested.attribute.rawValue)
-            writer.writeUInt16(UInt16(value.count))
-            writer.writeBytes(value)
-        }
-        let bytes = writer.bytes
-        var crc: UInt16 = 0
-        var offset = 0
-        while offset < bytes.count {
-            let end = min(offset + 200, bytes.count)
-            crc = GarminCRC.compute(bytes[offset..<end], seed: crc)
-            await send(GFDINotificationData(messageSize: UInt16(bytes.count), crc: crc,
-                                            dataOffset: UInt16(offset), chunk: Data(bytes[offset..<end])))
-            offset = end
-        }
-    }
-
-    private static func attributeText(_ attribute: GFDINotificationAttribute, of notification: PhoneNotification) -> String {
-        switch attribute {
-        case .appIdentifier: notification.appIdentifier
-        case .title: notification.title
-        case .subtitle: notification.subtitle ?? ""
-        case .message: notification.body
-        case .messageSize: String(notification.body.utf8.count)
-        default: ""
-        }
-    }
-
     func sendWorkout(_ plan: WorkoutPlan) async throws {
         guard upload == nil else { throw GarminWatchError.busy }
         let data = WorkoutFitEncoder.encode(plan)
@@ -320,6 +274,7 @@ final class GFDISession {
         isSyncing = true
         syncTotal = 0
         syncDone = 0
+        syncedActivities = 0
         output(.progress(0, "Listing activities"))
         if usesNewSync {
             listing = true
@@ -406,6 +361,7 @@ final class GFDISession {
             output(.event(.log("Could not store FIT file \(key): \(error)")))
             return false
         }
+        syncedActivities += batch.activities.count
         output(.event(.healthBatchImported(batch)))
         return true
     }
@@ -414,6 +370,7 @@ final class GFDISession {
         guard isSyncing else { return }
         isSyncing = false
         await send(GFDISystemEvent(.syncComplete))
+        if syncedActivities > 0 { await notifySyncedActivities(syncedActivities) }
         output(.syncFinished)
     }
 
@@ -718,12 +675,12 @@ final class GFDISession {
 
     // MARK: - Writing
 
-    private func transmit(_ message: some GFDIOutgoing) async throws {
+    func transmit(_ message: some GFDIOutgoing) async throws {
         try await link.send(message.frame().encoded())
     }
 
     /// A send that fails only when the link is gone, which the service sees as a drop, so the error is not kept.
-    private func send(_ message: some GFDIOutgoing) async {
+    func send(_ message: some GFDIOutgoing) async {
         try? await transmit(message)
     }
 }
