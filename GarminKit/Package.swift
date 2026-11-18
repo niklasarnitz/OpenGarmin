@@ -31,6 +31,7 @@ let package = Package(
         // The device session: handshake, sync, file transfer, notifications, weather, settings.
         .target(name: "GarminSession", dependencies: [
             "GarminCore", "GarminModels", "GarminProtobuf", "GarminProtocol", "GarminFIT", "GarminTransport", "GarminDevices",
+            .product(name: "SwiftProtobuf", package: "swift-protobuf"),
         ]),
         // HealthKit writing of GarminModels.
         .target(name: "GarminHealth", dependencies: ["GarminModels"]),
@@ -41,6 +42,8 @@ let package = Package(
         .testTarget(name: "GarminTransportTests", dependencies: ["GarminTransport"]),
         .testTarget(name: "GarminDevicesTests", dependencies: ["GarminDevices"]),
         .testTarget(name: "GarminHealthTests", dependencies: ["GarminHealth", "GarminModels"]),
-        .testTarget(name: "GarminSessionTests", dependencies: ["GarminSession"]),
+        .testTarget(name: "GarminSessionTests", dependencies: [
+            "GarminSession", "GarminCore", "GarminFIT", "GarminModels", "GarminProtocol", "GarminTransport",
+        ]),
     ]
 )
