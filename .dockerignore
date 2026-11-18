@@ -1,0 +1,9 @@
+.git
+**/.build
+**/.swiftpm
+**/node_modules
+**/dist
+App
+OpenGarmin.xcodeproj
+docs
+scripts

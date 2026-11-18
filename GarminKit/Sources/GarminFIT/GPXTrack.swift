@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationXML)
+import FoundationXML
+#endif
 
 /// A point of a GPX track: latitude and longitude in degrees, and the altitude in metres when the file has one.
 public struct GPXTrackPoint: Sendable, Hashable {

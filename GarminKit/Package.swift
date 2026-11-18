@@ -10,6 +10,9 @@ let package = Package(
             "GarminTransport", "GarminDevices", "GarminSession", "GarminHealth", "GarminShared", "GarminExport", "GarminConnect",
             "GarminBackend",
         ]),
+        // Platform-neutral subset for the Linux server: FIT decoding and the health models only.
+        .library(name: "GarminFIT", targets: ["GarminCore", "GarminModels", "GarminFIT"]),
+        .library(name: "GarminModels", targets: ["GarminModels"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.28.0"),

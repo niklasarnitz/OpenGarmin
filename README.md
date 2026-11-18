@@ -41,6 +41,58 @@ git clone https://codeberg.org/Freeyourgadget/Gadgetbridge.git vendor/Gadgetbrid
 git clone https://github.com/gwerneckp/garmin-ble.git vendor/garmin-ble
 ```
 
+## Server (self-hosted backend)
+
+`Server/` is a Swift (Vapor) server with PostgreSQL. It keeps every raw FIT file, Garmin Connect response and Apple Health
+sample forever, at full resolution, and serves the API in `docs/backend-api.md` and the dashboard in `Web/`. The
+dashboard is built into the image; `Server/Public/` holds only the placeholder and `connect.html`.
+
+### Run with Docker Compose
+
+```sh
+cd Server
+cp docker-compose.example.yml docker-compose.yml   # change every "change-me"
+docker compose up -d
+```
+
+The first account is registered with `POST /api/v1/auth/register` (the app's sign-up does this too). Later
+accounts need `OPENGARMIN_ALLOW_SIGNUP=true`. Put the server behind HTTPS (a reverse proxy) before you expose it, because
+the session cookie is `Secure`. The compose file's `s3` service stores raw bytes in S3; create the bucket once (see the
+comment in the file). Without S3, remove the five `OPENGARMIN_S3_*` lines and the `s3` service, and the server keeps the
+files in `/data`.
+
+To build the image yourself, use the repository root as build context:
+
+```sh
+docker build -f Server/Dockerfile -t opengarmin-server .
+```
+
+### Environment
+
+| Variable | Meaning |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL URL, required. The server runs its migrations at startup. |
+| `OPENGARMIN_DATA_DIR` | Where raw bytes go when S3 is off. Default `./data` (`/data` in the image). |
+| `OPENGARMIN_ALLOW_SIGNUP` | `true` allows sign-up after the first account. Default `false`. |
+| `PORT` | HTTP port. Default `8080`. |
+| `OPENGARMIN_S3_ENDPOINT` | S3 endpoint, such as `http://s3:7070`. Setting it turns S3 on. |
+| `OPENGARMIN_S3_REGION` | S3 region. Default `us-east-1`. |
+| `OPENGARMIN_S3_BUCKET` | Bucket for raw bytes. Required with an endpoint. |
+| `OPENGARMIN_S3_ACCESS_KEY`, `OPENGARMIN_S3_SECRET_KEY` | S3 credentials. Required with an endpoint. |
+
+Health check: `GET /healthz`.
+
+### Tests
+
+```sh
+cd Server
+TEST_DATABASE_URL=postgres://user:pass@localhost:5432/opengarmin_test swift test
+```
+
+The tests drop and recreate the `public` schema of the database in `TEST_DATABASE_URL`, so use a disposable database.
+Without it the database tests are skipped. The S3 test runs when `OPENGARMIN_TEST_S3_ENDPOINT` (and the `_ACCESS_KEY`,
+`_SECRET_KEY`, `_BUCKET`, `_REGION` variants) point at an S3 server, and is skipped otherwise.
+
 ## Thanks to
 
 - [Gadgetbridge](https://codeberg.org/Freeyourgadget/Gadgetbridge) – the Garmin GFDI protocol, FIT handling, protobuf definitions and device list this app is based on.

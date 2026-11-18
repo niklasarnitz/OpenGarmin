@@ -63,7 +63,10 @@ public enum UserProfileFitEncoder {
     /// Seconds since local midnight, as the watch stores wake and sleep times.
     private static func secondsOfDay(_ time: DateComponents) -> Int64? {
         guard let hour = time.hour else { return nil }
-        return Int64(hour * 3600 + (time.minute ?? 0) * 60 + (time.second ?? 0))
+        let minutes: Int = time.minute ?? 0
+        let seconds: Int = time.second ?? 0
+        let total: Int = hour * 3600 + minutes * 60 + seconds
+        return Int64(total)
     }
 
     private static func field(_ number: UInt8, _ baseType: FitBaseType, _ value: Int64) -> FitEncodeField {

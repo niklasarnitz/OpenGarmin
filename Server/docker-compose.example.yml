@@ -1,0 +1,63 @@
+# Copy to docker-compose.yml, change every "change-me", then: docker compose up -d
+# The server reads its settings from the environment only (see the Server section in the repository README).
+
+services:
+  server:
+    image: ghcr.io/niklasarnitz/opengarmin-server:main
+    # To build from source instead, use the repository root as context:
+    # build:
+    #   context: ..
+    #   dockerfile: Server/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://opengarmin:change-me@db:5432/opengarmin
+      # Raw FIT files and Connect responses when OPENGARMIN_S3_ENDPOINT is unset. Ignored otherwise.
+      OPENGARMIN_DATA_DIR: /data
+      # Only the first account can be created unless this is "true".
+      OPENGARMIN_ALLOW_SIGNUP: "false"
+      # Optional S3 storage for raw bytes (any S3 API: versitygw, MinIO, AWS). Remove these five lines and the
+      # s3 service to store files under /data instead.
+      OPENGARMIN_S3_ENDPOINT: http://s3:7070
+      OPENGARMIN_S3_REGION: de-01
+      OPENGARMIN_S3_BUCKET: opengarmin
+      OPENGARMIN_S3_ACCESS_KEY: change-me
+      OPENGARMIN_S3_SECRET_KEY: change-me-long-secret
+    volumes:
+      - ./data:/data
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: opengarmin
+      POSTGRES_PASSWORD: change-me
+      POSTGRES_DB: opengarmin
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opengarmin -d opengarmin"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Optional S3 for raw bytes (versitygw, path-style). Create the bucket named in OPENGARMIN_S3_BUCKET once,
+  # with any S3 client pointed at http://localhost:7070, e.g. `aws --endpoint-url http://localhost:7070 s3 mb s3://opengarmin`.
+  s3:
+    image: ghcr.io/versity/versitygw:latest
+    restart: unless-stopped
+    command: ["--port", ":7070", "--region", "de-01", "posix", "/data"]
+    environment:
+      ROOT_ACCESS_KEY: change-me
+      ROOT_SECRET_KEY: change-me-long-secret
+      VGW_REGION: de-01
+    volumes:
+      - s3data:/data
+
+volumes:
+  pgdata:
+  s3data:
