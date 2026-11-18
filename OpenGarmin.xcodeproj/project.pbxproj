@@ -21,6 +21,7 @@
 		60C0672559EBB5D2A86DB621 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0BAF61680880105D7D7002B /* OnboardingView.swift */; };
 		6F189C3A966DAFCA9748215B /* WorkoutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D378DA9CDCE4CA18315C54 /* WorkoutsView.swift */; };
 		6FAD24C777526C3410D2D5D8 /* ProfileEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B8E621E4415862DE0E261CE /* ProfileEditorView.swift */; };
+		7D845AFA74D64874C896C197 /* ConnectImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B1B38ECED705C4375C6AFD /* ConnectImportView.swift */; };
 		7E81CE93BC975632B0473887 /* DeviceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D61366771DCE92B050FFAD6 /* DeviceView.swift */; };
 		80BA2EAB50DAD6428E826BD4 /* CalendarSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1930890AA4F22521AB81AE30 /* CalendarSync.swift */; };
 		A539AEFF57B554D63409BB4F /* OpenGarminApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66304C8BFAC98948490CDE1D /* OpenGarminApp.swift */; };
@@ -61,6 +62,7 @@
 		B2D378DA9CDCE4CA18315C54 /* WorkoutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutsView.swift; sourceTree = "<group>"; };
 		BA8BFAC76074941B94B4E846 /* PhoneSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSync.swift; sourceTree = "<group>"; };
 		CC6C608D1507F9F30D4E2644 /* ActivityDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityDetailView.swift; sourceTree = "<group>"; };
+		E7B1B38ECED705C4375C6AFD /* ConnectImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectImportView.swift; sourceTree = "<group>"; };
 		ED52FCFCB2D9B4B426865293 /* Permissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Permissions.swift; sourceTree = "<group>"; };
 		EF7D06299C939C6BCA3CD3CA /* ActivitiesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivitiesView.swift; sourceTree = "<group>"; };
 		F0BAF61680880105D7D7002B /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
@@ -99,6 +101,7 @@
 			isa = PBXGroup;
 			children = (
 				15B8E20792F27FE992C2CA9C /* CalendarSettingsView.swift */,
+				E7B1B38ECED705C4375C6AFD /* ConnectImportView.swift */,
 				4D61366771DCE92B050FFAD6 /* DeviceView.swift */,
 				0B8E621E4415862DE0E261CE /* ProfileEditorView.swift */,
 			);
@@ -308,6 +311,7 @@
 				57BE5B1CC60B7303C1D7A8C8 /* CalendarSettingsView.swift in Sources */,
 				80BA2EAB50DAD6428E826BD4 /* CalendarSync.swift in Sources */,
 				58A293F63F43C183445E8AB8 /* Components.swift in Sources */,
+				7D845AFA74D64874C896C197 /* ConnectImportView.swift in Sources */,
 				7E81CE93BC975632B0473887 /* DeviceView.swift in Sources */,
 				3EEF1F4B50A5D048465BF5F5 /* FindMyPhoneAlert.swift in Sources */,
 				03909B80966ED30B8D7EAE6C /* HealthStore.swift in Sources */,

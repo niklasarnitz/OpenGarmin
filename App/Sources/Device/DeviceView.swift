@@ -30,6 +30,7 @@ struct DeviceView: View {
                 faceCard(watch)
                 connection(watch)
                 profile
+                connectImport
                 features
                 notifications(watch)
                 satelliteData
@@ -108,6 +109,20 @@ struct DeviceView: View {
                 ProfileEditorView()
             } label: {
                 Label("Edit profile and send to watch", systemImage: "pencil")
+            }
+        }
+    }
+
+    /// Garmin Connect history: signs in to the account and imports the activities and daily data it holds.
+    @ViewBuilder
+    private var connectImport: some View {
+        if let service = app.watch as? GarminWatchService {
+            MetricTile("Garmin Connect", symbol: "icloud.and.arrow.down", tint: Palette.glacier) {
+                NavigationLink {
+                    ConnectImportView(watch: service)
+                } label: {
+                    Label("Import history from Garmin Connect", systemImage: "arrow.down.circle")
+                }
             }
         }
     }

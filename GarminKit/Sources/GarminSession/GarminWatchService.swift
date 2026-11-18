@@ -200,6 +200,24 @@ public final class GarminWatchService: WatchService {
         try await session.setTime()
     }
 
+    // MARK: - Files and batches from outside the watch
+
+    /// Whether a file or batch with this key was imported, or is waiting to be imported.
+    public func hasImported(_ key: String) async -> Bool {
+        await importer.isKnown(key)
+    }
+
+    /// Imports a FIT file that did not come from the watch, such as an activity's original file from Garmin Connect.
+    /// It goes through the watch's import stage, so it reaches Health the same way the watch's files do.
+    public func importFITFile(_ bytes: Data, key: String) async throws {
+        try await importer.accept(bytes, fileKey: key)
+    }
+
+    /// Imports a batch that has no FIT file, such as daily stress and Body Battery from Garmin Connect.
+    public func importBatch(_ batch: HealthBatch, key: String) async throws {
+        try await importer.acceptBatch(batch, fileKey: key)
+    }
+
     // MARK: - Connection
 
     private func setPairedWatch(_ watch: PairedWatch?) {
