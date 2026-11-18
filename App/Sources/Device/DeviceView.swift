@@ -81,7 +81,9 @@ struct DeviceView: View {
                     .padding(.top, 6)
             }
         }
-        .frame(maxWidth: .infinity)
+        // A square card with the ring and the name centred both ways in it.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .aspectRatio(1, contentMode: .fit)
         .tile()
     }
 
