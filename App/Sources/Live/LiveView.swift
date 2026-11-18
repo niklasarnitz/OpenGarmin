@@ -30,7 +30,7 @@ struct LiveView: View {
                 .pickerStyle(.menu)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                MetricTile(Self.title(metric), symbol: Self.symbol(metric), tint: Palette.glacier) {
+                MetricTile(LocalizedStringKey(Self.title(metric)), symbol: Self.symbol(metric), tint: Palette.glacier) {
                     if let text = Self.valueText(latest) {
                         MetricFigure(value: text.value, unit: text.unit, size: 52)
                     } else {

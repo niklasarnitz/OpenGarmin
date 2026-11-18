@@ -80,7 +80,7 @@ struct ProfileEditorView: View {
                 try await app.watch.updateProfile(profile)
                 saveCount += 1
             } catch {
-                saveError = "\(error.localizedDescription) It is saved and goes to the watch when it next connects."
+                saveError = String(localized: "\(error.localizedDescription) It is saved and goes to the watch when it next connects.")
             }
             isSaving = false
         }

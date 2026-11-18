@@ -110,7 +110,7 @@ struct InsightsView: View {
     private func dailyChart(_ title: String, symbol: String, tint: Color, unit: String,
                             value: @escaping (DayInsight) -> Double?) -> some View {
         let points = trend.compactMap { day in value(day).map { PointSample(date: day.day, value: $0) } }
-        return MetricTile(title, symbol: symbol, tint: tint) {
+        return MetricTile(LocalizedStringKey(title), symbol: symbol, tint: tint) {
             MetricFigure(value: points.latest.map { Formatting.whole($0) } ?? "–", unit: unit, size: 34)
             Chart(points, id: \.date) { point in
                 BarMark(x: .value("Day", point.date, unit: .day), y: .value(title, point.value))

@@ -23,7 +23,7 @@ struct WorkoutsView: View {
                         Text("Build a workout and send it to your watch.")
                     } actions: {
                         Button("New workout") { isBuilding = true }
-                            .buttonStyle(.glassProminent)
+                            .buttonStyle(.borderedProminent)
                     }
                 } else {
                     List {
@@ -85,7 +85,7 @@ struct WorkoutsView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
-            Spacer()
+            Spacer(minLength: 8)
             Button {
                 send(plan)
             } label: {
@@ -93,12 +93,16 @@ struct WorkoutsView: View {
                     ProgressView()
                 } else if sentPlanID == plan.id {
                     Image(systemName: "checkmark")
+                        .symbolEffect(.bounce, value: sendCount)
                 } else {
                     Label("Send", systemImage: "paperplane.fill")
+                        .labelStyle(.titleAndIcon)
                 }
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.bordered)
+            .fixedSize()
             .disabled(sendingPlanID != nil)
+            .accessibilityLabel("Send \(plan.name) to the watch")
         }
         .padding(.vertical, 4)
     }
