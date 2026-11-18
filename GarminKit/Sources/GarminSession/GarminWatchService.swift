@@ -30,12 +30,16 @@ extension GarminWatchError: LocalizedError {
 @MainActor
 @Observable
 public final class GarminWatchService: WatchService {
-    public private(set) var state: WatchConnectionState
+    public private(set) var state: WatchConnectionState {
+        // A dropped link or a finished sync leaves no file downloading.
+        didSet { if case .syncing = state {} else { fileProgress = nil } }
+    }
     public private(set) var pairedWatch: PairedWatch?
     public private(set) var battery: BatteryStatus?
     public private(set) var nearby: [NearbyWatch] = []
     /// The retained history: every imported activity and the samples of the last 30 days.
     public private(set) var latest: HealthBatch
+    public private(set) var fileProgress: FileTransferProgress?
     public let events: AsyncStream<WatchEvent>
     /// The GPS satellite data the watch takes from the phone: its URLs, cached files and refresh.
     public let agps: AGPSCache
@@ -302,6 +306,8 @@ public final class GarminWatchService: WatchService {
             }
         case let .progress(fraction, detail):
             state = .syncing(progress: fraction, detail: detail)
+        case let .fileProgress(progress):
+            fileProgress = progress
         case .syncFinished:
             if var watch = pairedWatch {
                 watch.lastSync = .now

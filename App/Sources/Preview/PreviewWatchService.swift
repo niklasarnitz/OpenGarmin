@@ -13,6 +13,7 @@ final class PreviewWatchService: WatchService {
     private(set) var battery: BatteryStatus? = BatteryStatus(percent: 78, isCharging: false)
     private(set) var nearby: [NearbyWatch] = []
     private(set) var latest: HealthBatch = PreviewData.batch()
+    private(set) var fileProgress: FileTransferProgress?
     let events = AsyncStream<WatchEvent>.makeStream().stream
 
     private var scanTask: Task<Void, Never>?
@@ -65,8 +66,12 @@ final class PreviewWatchService: WatchService {
         let steps = ["Heart rate", "Sleep", "Steps", "Stress", "Body battery", "Activities"]
         for (index, detail) in steps.enumerated() {
             state = .syncing(progress: Double(index + 1) / Double(steps.count), detail: detail)
-            try? await Task.sleep(for: .milliseconds(400))
+            for received in stride(from: 0, through: 96_000, by: 16_000) {
+                fileProgress = FileTransferProgress(bytes: received, totalBytes: 96_000)
+                try? await Task.sleep(for: .milliseconds(80))
+            }
         }
+        fileProgress = nil
         state = .connected
         pairedWatch?.lastSync = .now
     }

@@ -15,6 +15,20 @@ public enum WatchConnectionState: Sendable, Equatable {
     case failed(String)
 }
 
+/// Progress of the one file being downloaded from the watch during a sync.
+public struct FileTransferProgress: Sendable, Equatable {
+    /// File bytes received so far (uncompressed).
+    public var bytes: Int
+    /// The file's size, when the watch reported it.
+    public var totalBytes: Int?
+    public init(bytes: Int, totalBytes: Int?) { self.bytes = bytes; self.totalBytes = totalBytes }
+    /// 0...1, or nil when the size is unknown.
+    public var fraction: Double? {
+        guard let totalBytes, totalBytes > 0 else { return nil }
+        return min(Double(bytes) / Double(totalBytes), 1)
+    }
+}
+
 public struct PairedWatch: Sendable, Codable, Hashable, Identifiable {
     /// CoreBluetooth peripheral identifier.
     public var id: UUID
@@ -59,6 +73,8 @@ public protocol WatchService: AnyObject, Observable {
     var nearby: [NearbyWatch] { get }
     /// Most recent synced data kept for the dashboard (also written to HealthKit by the app).
     var latest: HealthBatch { get }
+    /// The file currently downloading during a sync, nil otherwise.
+    var fileProgress: FileTransferProgress? { get }
     var events: AsyncStream<WatchEvent> { get }
 
     func startScanning()

@@ -81,6 +81,7 @@ struct DeviceView: View {
         MetricTile("Connection", symbol: "antenna.radiowaves.left.and.right", tint: Palette.glacier) {
             LabeledContent("Last sync", value: Formatting.lastSeen(watch.lastSync))
             LabeledContent("State", value: app.watch.state.label)
+            SyncProgressView(state: app.watch.state, file: app.watch.fileProgress)
             HStack(spacing: 10) {
                 Button("Sync now", systemImage: "arrow.triangle.2.circlepath") {
                     Task { await app.watch.syncNow() }

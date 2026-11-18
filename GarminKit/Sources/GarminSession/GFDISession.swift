@@ -12,6 +12,8 @@ enum GFDISessionOutput: Sendable {
     /// The handshake finished: the watch has identified itself and sent its capabilities.
     case ready(DeviceInfo?, Set<GarminCapability>)
     case progress(Double, String)
+    /// The current file's download progress; nil once no file is downloading.
+    case fileProgress(FileTransferProgress?)
     case syncFinished
     case event(WatchEvent)
 }
@@ -85,6 +87,8 @@ final class GFDISession {
         /// FIT files are data type 128.
         var isFIT: Bool { dataType == 128 }
     }
+
+    private var lastFileProgressStep = -1
 
     private struct Download {
         /// nil for the root directory.
@@ -314,12 +318,14 @@ final class GFDISession {
             return
         }
         download?.size = Int(status.maxFileSize)
+        if download?.file != nil { reportFileProgress(0, of: Int(status.maxFileSize)) }
         if status.maxFileSize == 0 { await completeDownload() }
     }
 
     private func receiveDownloadChunk(_ data: Data) async {
         guard download?.size != nil else { return }
         download?.data.append(data)
+        if let current = download, current.file != nil { reportFileProgress(current.data.count, of: current.size) }
         if let finished = download, let size = finished.size, finished.data.count >= size {
             await completeDownload()
         }
@@ -353,6 +359,7 @@ final class GFDISession {
                 continue
             }
             download = Download(file: file)
+            reportFileProgress(0, of: nil)
             output(.progress(Double(syncDone) / Double(max(syncTotal, 1)), "Downloading activity \(syncDone) of \(syncTotal)"))
             await send(GFDIDownloadRequest(fileIndex: file.index, dataOffset: 0, mode: .new, crcSeed: 0, dataSize: 0))
             return
@@ -375,6 +382,7 @@ final class GFDISession {
     private func finishSync() async {
         guard isSyncing else { return }
         isSyncing = false
+        output(.fileProgress(nil))
         await send(GFDISystemEvent(.syncComplete))
         if syncedActivities > 0 { await notifySyncedActivities(syncedActivities) }
         output(.syncFinished)
@@ -483,6 +491,7 @@ final class GFDISession {
                 continue
             }
             currentItem = item
+            reportFileProgress(0, of: item.hasDataSize ? Int(item.dataSize) : nil)
             output(.progress(Double(syncDone) / Double(max(syncTotal, 1)), "Downloading activity \(syncDone) of \(syncTotal)"))
             try? await sendProtobufRequest(Self.pullRequest(item))
             return
@@ -504,7 +513,7 @@ final class GFDISession {
 
     /// Reads the pulled file from its transfer service, imports it, and marks it as synced on the watch.
     private func fetchCurrent(_ item: Item, handle: UInt32) async {
-        let bytes = try? await transfer(handle: handle)
+        let bytes = try? await transfer(handle: handle, size: item.hasDataSize ? Int(item.dataSize) : nil)
         guard !Task.isCancelled else { return }
         if let bytes, await keep(itemKey(item), bytes: bytes) {
             if item.dataType.gdxmlString == Self.activityItemType { syncedActivities += 1 }
@@ -516,7 +525,7 @@ final class GFDISession {
 
     /// Opens a transfer service and asks for the file with the handle the watch gave it. The watch answers with a
     /// 0,0,0 marker and then the zlib-compressed file, and closes the service when it is done.
-    private func transfer(handle: UInt32) async throws -> Data? {
+    private func transfer(handle: UInt32, size: Int?) async throws -> Data? {
         let channel = try await link.openFileTransfer()
         var request = ByteWriter()
         request.writeUInt8(0)
@@ -528,6 +537,8 @@ final class GFDISession {
 
         var compressed = Data()
         var started = false
+        // Inflating as the data arrives only measures progress; the file itself is inflated in one go at the end.
+        let meter = InflateMeter()
         for await payload in channel.incoming {
             guard started else {
                 guard payload == Data([0, 0, 0]) else { return nil }
@@ -535,8 +546,18 @@ final class GFDISession {
                 continue
             }
             compressed.append(payload)
+            if let inflated = meter.feed(payload) { reportFileProgress(inflated, of: size) }
         }
         return Self.inflate(compressed)
+    }
+
+    /// Reports the current file's progress, at most once per percent so the UI is not flooded per BLE packet.
+    private func reportFileProgress(_ bytes: Int, of total: Int?) {
+        let progress = FileTransferProgress(bytes: bytes, totalBytes: total)
+        let step = progress.fraction.map { Int($0 * 100) } ?? bytes / 4096
+        guard step != lastFileProgressStep || bytes == 0 else { return }
+        lastFileProgressStep = step
+        output(.fileProgress(progress))
     }
 
     /// Garmin sends a zlib stream: a two-byte header, then deflate data. Foundation's `.zlib` takes the deflate data alone.

@@ -371,6 +371,12 @@ struct OnboardingView: View {
                 Text(detail)
                     .font(.headline)
                     .contentTransition(.opacity)
+                if let file = app.watch.fileProgress, let fraction = file.fraction {
+                    ProgressView(value: fraction)
+                        .tint(Palette.glacier)
+                        .frame(maxWidth: 240)
+                        .animation(.smooth, value: fraction)
+                }
             } else {
                 ProgressView()
                     .controlSize(.large)
