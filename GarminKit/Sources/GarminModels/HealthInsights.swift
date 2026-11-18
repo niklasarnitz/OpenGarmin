@@ -10,6 +10,8 @@ public struct DayInsight: Sendable, Codable, Hashable, Identifiable {
     public var restingHeartRate: Double?
     /// 0-100
     public var averageStress: Double?
+    /// Overnight HRV (RMSSD) in ms, the mean of the day's readings.
+    public var hrv: Double?
     /// Lowest and highest body battery reading of the day, 0-100.
     public var bodyBatteryLow: Double?
     public var bodyBatteryHigh: Double?
@@ -137,19 +139,22 @@ public enum HealthInsights {
         let resting = Dictionary(batch.restingHeartRate.sorted { $0.date < $1.date }.map { (day($0.date), $0.value) },
                                  uniquingKeysWith: { _, later in later })
         let stress = Dictionary(grouping: batch.stress) { day($0.date) }
+        let hrv = Dictionary(grouping: batch.hrv) { day($0.date) }
         let battery = Dictionary(grouping: batch.bodyBattery) { day($0.date) }
         let steps = Dictionary(grouping: batch.steps) { day($0.start) }
         let sleep = Dictionary(grouping: batch.sleep) { day($0.start) }
         let activities = Dictionary(grouping: batch.activities) { day($0.start) }
 
         let days = Set(resting.keys)
-            .union(stress.keys).union(battery.keys).union(steps.keys).union(sleep.keys).union(activities.keys)
+            .union(stress.keys).union(hrv.keys).union(battery.keys).union(steps.keys).union(sleep.keys)
+            .union(activities.keys)
         return days.sorted().map { day in
             let levels = battery[day]?.map(\.value) ?? []
             return DayInsight(
                 day: day,
                 restingHeartRate: resting[day],
                 averageStress: mean(stress[day]?.map(\.value) ?? []),
+                hrv: mean(hrv[day]?.map(\.value) ?? []),
                 bodyBatteryLow: levels.min(),
                 bodyBatteryHigh: levels.max(),
                 sleepMinutes: sleep[day].map { sessions in
