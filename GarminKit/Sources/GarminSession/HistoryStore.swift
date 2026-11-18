@@ -22,7 +22,7 @@ public struct DailySummary: Sendable, Codable, Hashable, Identifiable {
 /// The history on disk: the samples of the retention period (90 days, except 30 days for heart rate, SpO2 and respiration), every imported activity, one summary per day, the keys
 /// of the files already imported, and the raw FIT files. Only the import stage (`FITImporter`) owns and writes it, so
 /// it never runs on the main actor. Layout under `directory`: `history.json`, `Inbox/` (files waiting for import) and
-/// `FIT/` (imported files).
+/// `FIT/` (imported files) and `Batches/` (batches without a FIT file, as JSON, for the backend upload).
 struct HistoryStore {
     /// Samples older than this are dropped from the history. Activities and their records are kept.
     static let retention: TimeInterval = 30 * 24 * 3600
@@ -85,6 +85,7 @@ struct HistoryStore {
     // MARK: - Files
 
     var inboxDirectory: URL { directory.appendingPathComponent("Inbox", isDirectory: true) }
+    private var batchesDirectory: URL { directory.appendingPathComponent("Batches", isDirectory: true) }
     private var fitDirectory: URL { directory.appendingPathComponent("FIT", isDirectory: true) }
 
     func inboxFile(for fileKey: String) -> URL {
@@ -104,6 +105,13 @@ struct HistoryStore {
             .filter { $0.pathExtension == "fit" }
             .map { (key: $0.deletingPathExtension().lastPathComponent, url: $0) }
             .sorted { $0.key < $1.key }
+    }
+
+    /// Keeps a batch that has no FIT file, so the backend upload can send it. Written before the history commit, so an
+    /// imported batch is always kept.
+    func saveBatch(_ batch: HealthBatch, fileKey: String) throws {
+        try FileManager.default.createDirectory(at: batchesDirectory, withIntermediateDirectories: true)
+        try JSONEncoder().encode(batch).write(to: batchesDirectory.appendingPathComponent(fileKey + ".json"), options: .atomic)
     }
 
     /// Moves an inbox file into `FIT/`, where imported files are kept.

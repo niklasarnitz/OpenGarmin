@@ -1,5 +1,6 @@
 import Foundation
 import GarminModels
+import os
 
 /// One row of Garmin's activity list.
 public struct ConnectActivity: Sendable, Equatable {
@@ -9,6 +10,8 @@ public struct ConnectActivity: Sendable, Equatable {
 
 /// Garmin's responses, read into the app's models. Pure, so the tests run on responses shaped like the recorded ones.
 enum ConnectParsing {
+    private static let logger = Logger(subsystem: "com.niklasarnitz.opengarmin", category: "connect")
+
     /// The SSO answer to a login or an MFA code.
     enum SSOStep: Equatable {
         case ticket(String)
@@ -94,6 +97,82 @@ enum ConnectParsing {
             return PointSample(date: date(milliseconds: ms), value: level)
         }
         return (stress, battery)
+    }
+
+    /// The night that ends on a day: the session from `dailySleepDTO`, its stages from `sleepLevels` and its score.
+    /// Nil when the day has no sleep. Garmin's stage codes are 0 deep, 1 light, 2 REM and 3 awake.
+    static func sleep(_ data: Data) -> SleepSession? {
+        guard let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let dto = json["dailySleepDTO"] as? [String: Any],
+              let startMs = number(dto["sleepStartTimestampGMT"]), let endMs = number(dto["sleepEndTimestampGMT"]),
+              endMs > startMs else { return nil }
+        let levels = (json["sleepLevels"] as? [[String: Any]]) ?? []
+        // Each raw activityLevel seen and the stage it mapped to, for checking the mapping against the account.
+        let mapping = Set(levels.map { level -> String in
+            let code = number(level["activityLevel"])
+            let stage = code.flatMap(sleepStage).map { "\($0)" } ?? "dropped"
+            return "\(code.map { String(Int($0)) } ?? "nil") -> \(stage)"
+        })
+        logger.debug("Connect sleep \(dto["calendarDate"] as? String ?? "?", privacy: .public): activityLevel \(mapping.sorted().joined(separator: ", "), privacy: .public)")
+        let intervals = levels.compactMap { level -> SleepInterval? in
+            guard let start = (level["startGMT"] as? String).flatMap({ gmtDate($0) }),
+                  let end = (level["endGMT"] as? String).flatMap({ gmtDate($0) }), end > start,
+                  let code = number(level["activityLevel"]), let stage = sleepStage(code) else { return nil }
+            return SleepInterval(start: start, end: end, stage: stage)
+        }
+        let scores = dto["sleepScores"] as? [String: Any]
+        func score(_ key: String) -> Int? {
+            number((scores?[key] as? [String: Any])?["value"]).map { Int($0) }
+        }
+        let breakdown: SleepScoreBreakdown? = scores == nil ? nil : SleepScoreBreakdown(
+            duration: score("totalDuration"), deep: score("deepPercentage"), light: score("lightPercentage"),
+            rem: score("remPercentage"), awakenings: score("awakeCount"), restlessness: score("restlessness"))
+        return SleepSession(start: date(milliseconds: startMs), end: date(milliseconds: endMs), intervals: intervals,
+                            score: score("overall"), scoreBreakdown: breakdown)
+    }
+
+    private static func sleepStage(_ code: Double) -> SleepStage? {
+        switch Int(code) {
+        case 0: .deep
+        case 1: .light
+        case 2: .rem
+        case 3: .awake
+        default: nil
+        }
+    }
+
+    /// The steps of each 15-minute interval of a day. Intervals without steps are left out.
+    static func steps(_ data: Data) -> [IntervalSample] {
+        let rows = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] ?? []
+        return rows.compactMap { row -> IntervalSample? in
+            guard let start = (row["startGMT"] as? String).flatMap({ gmtDate($0) }),
+                  let end = (row["endGMT"] as? String).flatMap({ gmtDate($0) }),
+                  let steps = number(row["steps"]), steps > 0 else { return nil }
+            return IntervalSample(start: start, end: end, value: steps)
+        }
+    }
+
+    /// The resting heart rate of a day from its daily summary. Nil when the summary has none.
+    static func restingHeartRate(_ data: Data) -> Double? {
+        guard let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let value = number(json["restingHeartRate"]), value > 0 else { return nil }
+        return value
+    }
+
+    /// The HRV of a night: its average, dated at the end of the sleep. Nil when HRV has no value for the day.
+    static func hrv(_ data: Data) -> PointSample? {
+        guard let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let summary = json["hrvSummary"] as? [String: Any],
+              let value = number(summary["lastNightAvg"]),
+              let end = (json["sleepEndTimestampGMT"] as? String).flatMap({ gmtDate($0) }) else { return nil }
+        return PointSample(date: end, value: value)
+    }
+
+    /// The display name of the signed-in account, which the per-user paths are built from.
+    static func displayName(_ data: Data) throws -> String {
+        let json = try jsonObject(data)
+        guard let name = json["displayName"] as? String else { throw GarminConnectError.malformedResponse }
+        return name
     }
 
     /// "2026-01-08 14:10:21" or "2026-01-08T14:10:21.0" as UTC.
