@@ -32,6 +32,10 @@ final class AppEnvironment {
         let environment = AppEnvironment(watch: watch)
         environment.handleWatchEvents()
         CalendarSync.pushChanges(to: watch)
+        WatchCommands.syncNow = { await watch.syncNow() }
+        WatchCommands.findMyWatch = { try await watch.findMyWatch() }
+        WatchCommands.sendWorkout = { try await watch.sendWorkout($0) }
+        LiveSync.start(watch)
         return environment
     }
 
