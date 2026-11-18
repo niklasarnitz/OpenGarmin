@@ -101,6 +101,11 @@ struct DeviceView: View {
         MetricTile("Phone features", symbol: "square.stack.3d.up.fill", tint: Palette.lichen) {
             Toggle("Weather", systemImage: "cloud.sun.fill", isOn: $weatherOn)
             Toggle("Calendar", systemImage: "calendar", isOn: $calendarOn)
+            if calendarOn {
+                NavigationLink { CalendarSettingsView() } label: {
+                    Label("Calendars and days ahead", systemImage: "list.bullet.rectangle")
+                }
+            }
             Toggle("Notifications", systemImage: "bell.fill", isOn: $notificationsOn)
             Text("Notifications reach the watch through iOS. Turn on Share System Notifications for the watch in Settings, Bluetooth.")
                 .font(.footnote)
@@ -110,7 +115,10 @@ struct DeviceView: View {
             if on { Task { try? await PhoneSync.pushWeather(to: app.watch) } }
         }
         .onChange(of: calendarOn) { _, on in
-            if on { Task { try? await PhoneSync.pushCalendar(to: app.watch) } }
+            Task {
+                if on { _ = await CalendarSync.requestAccess() }
+                try? await CalendarSync.push(to: app.watch)
+            }
         }
     }
 

@@ -25,12 +25,13 @@ final class AppEnvironment {
         let watch = GarminWatchService(
             store: store,
             weather: { try? await PhoneSync.weatherReport() },
-            calendar: { PhoneSync.calendarEvents() }
+            calendar: { CalendarSync.events() }
         )
         // State restoration only works when the central exists before launch finishes.
         if watch.pairedWatch != nil { GarminBluetooth.activate() }
         let environment = AppEnvironment(watch: watch)
         environment.mirrorImportsToHealth()
+        CalendarSync.pushChanges(to: watch)
         return environment
     }
 

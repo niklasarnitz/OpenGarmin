@@ -683,8 +683,9 @@ final class GFDISession {
             return
         }
         guard let bytes = complete, let smart = try? GarminVivomovehr_Smart(serializedBytes: bytes) else { return }
-        if smart.hasCalendarEventsService, let response = calendarResponse(smart.calendarEventsService) {
-            await sendProtobufResponse(response, requestID: chunk.requestID)
+        if smart.hasCalendarEventsService {
+            await sendProtobufResponse(GFDICalendar.response(to: smart.calendarEventsService, events: calendarEvents),
+                                       requestID: chunk.requestID)
         }
         if smart.hasDeviceStatusService, smart.deviceStatusService.hasRemoteDeviceBatteryStatusResponse {
             let status = smart.deviceStatusService.remoteDeviceBatteryStatusResponse
@@ -694,37 +695,6 @@ final class GFDISession {
         if smart.hasFileAccessService {
             await receiveFileAccess(smart.fileAccessService, requestID: chunk.requestID)
         }
-    }
-
-    /// Answers a watch calendar request with the pushed events in the requested range.
-    private func calendarResponse(_ calendar: GDI_Proto_Calendar_CalendarService) -> GarminVivomovehr_Smart? {
-        guard calendar.hasCalendarEventsRequest else { return nil }
-        let request = calendar.calendarEventsRequest
-        let limit = Int(request.maxEvents) * 2
-        var events: [GDI_Proto_Calendar_CalendarEvent] = []
-        for event in calendarEvents.sorted(by: { $0.start < $1.start }) where events.count < limit {
-            let start = UInt64(GarminTime.garminSeconds(from: event.start))
-            let end = UInt64(GarminTime.garminSeconds(from: event.end))
-            guard end >= request.startDate, start <= request.endDate else { continue }
-            guard request.includeAllDay || !event.isAllDay else { continue }
-            var item = GDI_Proto_Calendar_CalendarEvent()
-            item.title = String(event.title.prefix(Int(request.maxTitleLength)))
-            item.startDate = start
-            item.endDate = end
-            item.allDay = event.isAllDay
-            if request.includeLocation, let location = event.location {
-                item.location = String(location.prefix(Int(request.maxLocationLength)))
-            }
-            events.append(item)
-        }
-        var response = GDI_Proto_Calendar_CalendarEventsResponse()
-        response.events = events
-        response.status = .ok
-        var service = GDI_Proto_Calendar_CalendarService()
-        service.calendarEventsResponse = response
-        var smart = GarminVivomovehr_Smart()
-        smart.calendarEventsService = service
-        return smart
     }
 
     private func sendProtobufRequest(_ smart: GarminVivomovehr_Smart) async throws {

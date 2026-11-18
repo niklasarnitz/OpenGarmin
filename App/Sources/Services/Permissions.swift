@@ -1,6 +1,5 @@
 import CoreBluetooth
 import CoreLocation
-import EventKit
 import Observation
 import UserNotifications
 
@@ -57,7 +56,7 @@ final class PermissionCenter {
         case .location:
             await LocationProvider.shared.requestAuthorization()
         case .calendar:
-            _ = try? await EKEventStore().requestFullAccessToEvents()
+            _ = await CalendarSync.requestAccess()
         }
         answered.insert(permission)
     }

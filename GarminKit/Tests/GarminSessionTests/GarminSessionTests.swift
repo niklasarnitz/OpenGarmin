@@ -89,14 +89,14 @@ final class FakeLink: GarminServiceLink {
 }
 
 @MainActor
-private func makeStore() throws -> SessionStore {
+func makeStore() throws -> SessionStore {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     let defaults = UserDefaults(suiteName: UUID().uuidString)!
     return try SessionStore(directory: directory, defaults: defaults)
 }
 
 @MainActor
-private func waitUntil(_ condition: () -> Bool) async throws {
+func waitUntil(_ condition: () -> Bool) async throws {
     for _ in 0..<500 {
         if condition() { return }
         try await Task.sleep(for: .milliseconds(10))
@@ -105,7 +105,7 @@ private func waitUntil(_ condition: () -> Bool) async throws {
 }
 
 /// DEVICE_INFORMATION as a Venu-style watch sends it: protocol 2.00, no Bluetooth MAC.
-private func deviceInformationFrame() -> GFDIFrame {
+func deviceInformationFrame() -> GFDIFrame {
     var w = ByteWriter()
     w.writeUInt16(200)
     w.writeUInt16(3111)
