@@ -43,3 +43,11 @@ import Foundation
     _ = handshake.receive(Data([0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0]))
     #expect(handshake.step == .refused(status: 1))
 }
+
+@Test func fileTransferRegisterReplyFromAVenu4CarriesTheMLRFlagInItsHandle() {
+    // Captured from a Venu 4: FILE_TRANSFER_2 (0x2018) opened with status 0 on handle 0x83, reliable.
+    let reply = Data(hex: "00010200000000000000182000830101")!
+    #expect(MLRControl.decode(reply) == .register(service: 0x2018, status: 0, handle: 0x83, reliable: true))
+    // Its data packets carry only the low three bits: 0xB0 = MLR flag | handle 3 << 4.
+    #expect(MLRPacket(decoding: Data([0xB0, 0x40, 0, 0, 0]))?.handle == UInt8(3))
+}

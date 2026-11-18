@@ -14,7 +14,8 @@ enum MLRControl {
 
     enum Reply: Equatable {
         case closeAll
-        case register(service: UInt16, status: UInt8, handle: UInt8)
+        /// `reliable` is false when the watch opened the handle without MLR: packets are then `[handle] payload`.
+        case register(service: UInt16, status: UInt8, handle: UInt8, reliable: Bool)
         /// The watch closed a service: it has sent everything on it.
         case closeHandle(service: UInt16, handle: UInt8)
     }
@@ -38,7 +39,8 @@ enum MLRControl {
             return .closeAll
         case registerResponseType:
             guard bytes.count >= 14 else { return nil }
-            return .register(service: UInt16(bytes[10]) | UInt16(bytes[11]) << 8, status: bytes[12], handle: bytes[13])
+            return .register(service: UInt16(bytes[10]) | UInt16(bytes[11]) << 8, status: bytes[12], handle: bytes[13],
+                             reliable: bytes.count > 14 ? bytes[14] != 0 : true)
         case closeHandleResponseType:
             guard bytes.count >= 13 else { return nil }
             return .closeHandle(service: UInt16(bytes[10]) | UInt16(bytes[11]) << 8, handle: bytes[12])
@@ -67,7 +69,7 @@ struct GFDIHandshake: Equatable {
         case (.closingAll, .closeAll):
             step = .registeringGFDI
             return MLRControl.registerRequest(service: MLRControl.gfdiService, reliable: true)
-        case let (.registeringGFDI, .register(service, status, handle)) where service == MLRControl.gfdiService:
+        case let (.registeringGFDI, .register(service, status, handle, _)) where service == MLRControl.gfdiService:
             step = status == 0 ? .open(handle: handle & 0x07) : .refused(status: status)
         default:
             break

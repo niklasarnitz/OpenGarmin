@@ -32,7 +32,11 @@ extension GarminWatchError: LocalizedError {
 public final class GarminWatchService: WatchService {
     public private(set) var state: WatchConnectionState {
         // A dropped link or a finished sync leaves no file downloading.
-        didSet { if case .syncing = state {} else { fileProgress = nil } }
+        didSet {
+            if case .syncing = state {} else {
+                fileProgress = nil
+            }
+        }
     }
     public private(set) var pairedWatch: PairedWatch?
     public private(set) var battery: BatteryStatus?

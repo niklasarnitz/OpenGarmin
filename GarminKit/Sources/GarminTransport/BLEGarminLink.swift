@@ -1,3 +1,4 @@
+import os
 import CoreBluetooth
 import Foundation
 import GarminCore
@@ -35,6 +36,8 @@ public final class BLEGarminLink: NSObject, GarminServiceLink {
     private var gfdiHandle: UInt8?
     /// Payload sinks of the open file transfer services, by handle.
     private var serviceSinks: [UInt8: AsyncStream<Data>.Continuation] = [:]
+    /// Service handles the watch opened without MLR.
+    private var plainHandles: Set<UInt8> = []
     /// Service codes in use, and the registrations still waiting for the watch's reply.
     private var openServices: Set<UInt16> = []
     private var openRequests: [UInt16: CheckedContinuation<UInt8, Error>] = [:]
@@ -130,6 +133,7 @@ public final class BLEGarminLink: NSObject, GarminServiceLink {
         gfdiHandle = nil
         serviceSinks.values.forEach { $0.finish() }
         serviceSinks = [:]
+        plainHandles = []
         openServices = []
         let waiting = Array(openRequests.values)
         openRequests = [:]
@@ -222,8 +226,17 @@ public final class BLEGarminLink: NSObject, GarminServiceLink {
             return
         }
         guard let first = data.first else { return }
+        // As Gadgetbridge (#5476): a plain handle byte can have the high bit set too, so MLR is tried first and
+        // anything no MLR channel takes is read as `[handle] payload`.
         let handle = (first >> 4) & 0x07
-        guard var mlr = channels[handle] else { return }
+        guard first & 0x80 != 0, var mlr = channels[handle] else {
+            if plainHandles.contains(first) {
+                serviceSinks[first]?.yield(data.dropFirst())
+            } else {
+                Self.log("dropped packet len=\(data.count) head=\(data.prefix(8).hexString)")
+            }
+            return
+        }
         let received = mlr.receive(data)
         channels[handle] = mlr
         for packet in received.outgoing { write(packet) }
@@ -256,21 +269,35 @@ public final class BLEGarminLink: NSObject, GarminServiceLink {
             break
         }
         switch MLRControl.decode(data) {
-        case let .register(service, status, handle)? where service != MLRControl.gfdiService:
+        case let .register(service, status, handle, reliable)? where service != MLRControl.gfdiService:
+            Self.log("register reply service=\(String(service, radix: 16)) status=\(status) handle=\(handle) reliable=\(reliable) raw=\(data.hexString)")
             guard let waiting = openRequests.removeValue(forKey: service) else { return }
             if status == 0 {
-                channels[handle] = MLRChannel(handle: handle, maxWrite: maxWrite)
-                waiting.resume(returning: handle)
+                // As Gadgetbridge: the watch decides. Reliable handles run MLR, the others carry `[handle] payload`.
+                // The reply's handle byte carries the MLR flag (e.g. 0x83), but MLR packets only carry its low
+                // three bits, so reliable channels are keyed by those.
+                if reliable {
+                    let key = handle & 0x07
+                    channels[key] = MLRChannel(handle: key, maxWrite: maxWrite)
+                    waiting.resume(returning: key)
+                } else {
+                    plainHandles.insert(handle)
+                    waiting.resume(returning: handle)
+                }
             } else {
                 openServices.remove(service)
                 waiting.resume(throwing: GarminLinkError.failed("watch refused the file transfer (status \(status))"))
             }
-        case let .closeHandle(service, handle)? where handle != gfdiHandle:
-            channels[handle] = nil
-            ackTimers.removeValue(forKey: handle)?.cancel()
-            retransmitTimers.removeValue(forKey: handle)?.cancel()
+        // Only file services this link opened; GFDI closes (e.g. leftovers of a previous client) must not touch them.
+        case let .closeHandle(service, handle)? where service != MLRControl.gfdiService && openServices.contains(service):
+            Self.log("close handle service=\(String(service, radix: 16)) handle=\(handle)")
+            // A plain handle closes under its own byte; a reliable one under its low three bits.
+            let key = plainHandles.remove(handle) != nil ? handle : handle & 0x07
+            channels[key] = nil
+            ackTimers.removeValue(forKey: key)?.cancel()
+            retransmitTimers.removeValue(forKey: key)?.cancel()
             openServices.remove(service)
-            serviceSinks.removeValue(forKey: handle)?.finish()
+            serviceSinks.removeValue(forKey: key)?.finish()
         default:
             break
         }
@@ -308,7 +335,19 @@ public final class BLEGarminLink: NSObject, GarminServiceLink {
 
     /// Sends a raw payload on a file transfer service. Service payloads are not COBS-framed.
     func sendService(_ payload: Data, on handle: UInt8) {
-        for packet in queue(payload, on: handle) { write(packet) }
+        if plainHandles.contains(handle) {
+            for chunk in chunked(payload, size: maxWrite - 1) { write(Data([handle]) + chunk) }
+        } else {
+            for packet in queue(payload, on: handle) { write(packet) }
+        }
+    }
+
+    private static let logger = Logger(subsystem: "com.niklasarnitz.opengarmin", category: "transport")
+
+    /// Transport diagnostics: unified logging, and stdout for `devicectl --console`.
+    static func log(_ message: String) {
+        logger.notice("\(message, privacy: .public)")
+        print("[transport] \(message)")
     }
 
     /// Acknowledges the watch's packets after `MLRChannel.ackDelay`, unless an acknowledgement goes out first.
@@ -350,7 +389,9 @@ public final class BLEGarminLink: NSObject, GarminServiceLink {
         openServices.insert(code)
         let handle: UInt8 = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<UInt8, Error>) in
             openRequests[code] = continuation
-            write(MLRControl.registerRequest(service: code, reliable: true))
+            let request = MLRControl.registerRequest(service: code, reliable: true)
+            Self.log("register request service=\(String(code, radix: 16)) raw=\(request.hexString)")
+            write(request)
         }
         let (stream, sink) = AsyncStream.makeStream(of: Data.self)
         serviceSinks[handle] = sink

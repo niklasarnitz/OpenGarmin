@@ -318,6 +318,7 @@ final class GFDISession {
             return
         }
         download?.size = Int(status.maxFileSize)
+        SyncDiagnostics.log("legacy download size=\(status.maxFileSize) file=\(download?.file != nil)")
         if download?.file != nil { reportFileProgress(0, of: Int(status.maxFileSize)) }
         if status.maxFileSize == 0 { await completeDownload() }
     }
@@ -491,6 +492,7 @@ final class GFDISession {
                 continue
             }
             currentItem = item
+            SyncDiagnostics.log("pull \(syncDone)/\(syncTotal) \(item.dataType.gdxmlString) size=\(item.hasDataSize ? String(item.dataSize) : "nil")")
             reportFileProgress(0, of: item.hasDataSize ? Int(item.dataSize) : nil)
             output(.progress(Double(syncDone) / Double(max(syncTotal, 1)), "Downloading activity \(syncDone) of \(syncTotal)"))
             try? await sendProtobufRequest(Self.pullRequest(item))
@@ -537,6 +539,7 @@ final class GFDISession {
 
         var compressed = Data()
         var started = false
+        var payloads = 0
         // Inflating as the data arrives only measures progress; the file itself is inflated in one go at the end.
         let meter = InflateMeter()
         for await payload in channel.incoming {
@@ -546,9 +549,13 @@ final class GFDISession {
                 continue
             }
             compressed.append(payload)
-            if let inflated = meter.feed(payload) { reportFileProgress(inflated, of: size) }
+            payloads += 1
+            let inflated = meter.feed(payload)
+            if let inflated { reportFileProgress(inflated, of: size) }
         }
-        return Self.inflate(compressed)
+        let file = Self.inflate(compressed)
+        SyncDiagnostics.log("transfer done payloads=\(payloads) compressed=\(compressed.count) inflated=\(file?.count ?? -1) meter=\(meter.inflatedBytes) size=\(size.map(String.init) ?? "nil")")
+        return file
     }
 
     /// Reports the current file's progress, at most once per percent so the UI is not flooded per BLE packet.
