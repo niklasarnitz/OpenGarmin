@@ -1,0 +1,61 @@
+name: Server image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Server/**"
+      - "GarminKit/**"
+      - "Web/**"
+      - ".github/workflows/server-image.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Server tests
+    runs-on: ubuntu-24.04-arm
+    container: swift:6.2-noble
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: opengarmin
+          POSTGRES_PASSWORD: opengarmin
+          POSTGRES_DB: opengarmin_test
+        options: >-
+          --health-cmd "pg_isready -U opengarmin -d opengarmin_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://opengarmin:opengarmin@postgres:5432/opengarmin_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: swift test
+        working-directory: Server
+        run: swift test
+
+  image:
+    name: Build and push image
+    needs: test
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Server/Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ghcr.io/niklasarnitz/opengarmin-server:sha-${{ github.sha }}
+            ghcr.io/niklasarnitz/opengarmin-server:main
