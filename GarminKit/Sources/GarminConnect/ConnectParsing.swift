@@ -114,6 +114,15 @@ enum ConnectParsing {
             return "\(code.map { String(Int($0)) } ?? "nil") -> \(stage)"
         })
         logger.debug("Connect sleep \(dto["calendarDate"] as? String ?? "?", privacy: .public): activityLevel \(mapping.sorted().joined(separator: ", "), privacy: .public)")
+        // Minutes per raw code: deep is usually the smallest share after awake, light the largest.
+        var minutes: [Int: Double] = [:]
+        for level in levels {
+            guard let code = number(level["activityLevel"]).map({ Int($0) }),
+                  let start = (level["startGMT"] as? String).flatMap({ gmtDate($0) }),
+                  let end = (level["endGMT"] as? String).flatMap({ gmtDate($0) }) else { continue }
+            minutes[code, default: 0] += end.timeIntervalSince(start) / 60
+        }
+        print("[connect] sleep \(dto["calendarDate"] as? String ?? "?"): \(mapping.sorted().joined(separator: ", ")) minutes \(minutes.sorted { $0.key < $1.key }.map { "\($0.key)=\(Int($0.value))" }.joined(separator: " "))")
         let intervals = levels.compactMap { level -> SleepInterval? in
             guard let start = (level["startGMT"] as? String).flatMap({ gmtDate($0) }),
                   let end = (level["endGMT"] as? String).flatMap({ gmtDate($0) }), end > start,
