@@ -248,15 +248,19 @@ final class GFDISession {
     }
 
     func sendWorkout(_ plan: WorkoutPlan) async throws {
+        try await transferFile(WorkoutFitEncoder.encode(plan), subType: 5)
+    }
+
+    /// Uploads a FIT file (data type 128) of the given sub type: workouts are 5, settings are 2.
+    func transferFile(_ data: Data, subType: UInt8) async throws {
         guard upload == nil else { throw GarminWatchError.busy }
-        let data = WorkoutFitEncoder.encode(plan)
         let id = UUID()
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             upload = Upload(id: id, data: data, continuation: continuation)
             Task {
                 do {
                     try await self.transmit(GFDICreateFile(
-                        fileSize: UInt32(data.count), dataType: 128, subType: 5,
+                        fileSize: UInt32(data.count), dataType: 128, subType: subType,
                         fileID: UInt64.random(in: .min ... .max)
                     ))
                 } catch {

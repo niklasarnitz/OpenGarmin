@@ -389,6 +389,83 @@ private func protobufResponse(_ smart: GarminVivomovehr_Smart) -> GFDIFrame {
     #expect(store.history.steps.map(\.value) == [50])
 }
 
+/// The profile below as a settings file, with time_created 1800000000 (Unix). Derived by hand from Gadgetbridge's
+/// FIT rules: big-endian values, local type 0 with a definition per message, and the FIT profile's scales and
+/// offsets. Born 1987, male, 176 cm (176), 81.3 kg (813), units imperial (1), resting 52, max 191, 12 h (0),
+/// sleep 23:15 (83700 s), wake 06:40 (24000 s).
+private let profileSettingsFile = "0e107d52790000002e464954d27940000100000600010001028402028404048603048c05028400020001fffe45ac860000000001000140000100030e0101000301020402840601000701000801020b01020d01000e01001501001801021c04861d04861e01000001b0032d010134bf0101015700005dc0000146f40140000100020104010000003379"
+
+private func asymmetricProfile() -> UserProfile {
+    UserProfile(birthDate: Calendar.current.date(from: DateComponents(year: 1987, month: 3, day: 9)),
+                gender: .male, heightCm: 176, weightKg: 81.3, restingHeartRate: 52, maxHeartRate: 191,
+                usesMetricUnits: false, uses24HourTime: false,
+                sleepTime: DateComponents(hour: 23, minute: 15), wakeTime: DateComponents(hour: 6, minute: 40))
+}
+
+/// A watch that accepts a file upload: the create, the upload request and every chunk are acknowledged.
+@MainActor
+private func acceptsUpload(_ frame: GFDIFrame) -> [GFDIFrame] {
+    switch frame.messageType {
+    case GFDIMessageID.createFile.rawValue:
+        return [GFDICreateFileStatus(result: .ok, fileIndex: 3, dataType: 128, subType: 2, fileNumber: 9).frame()]
+    case GFDIMessageID.uploadRequest.rawValue:
+        return [GFDIUploadRequestStatus(result: .ok, dataOffset: 0, maxFileSize: 1 << 20, crcSeed: 0).frame()]
+    case GFDIMessageID.fileTransferData.rawValue:
+        guard let chunk = try? GFDIFileTransferData(frame: frame) else { return [] }
+        return [GFDIFileTransferDataStatus(transfer: .ok, dataOffset: chunk.dataOffset + UInt32(chunk.data.count)).frame()]
+    default:
+        return []
+    }
+}
+
+@MainActor
+@Test func profileUploadSendsTheSettingsFileInGadgetbridgeFrames() async throws {
+    let store = try makeStore()
+    let link = FakeLink()
+    link.reply = acceptsUpload
+    let session = GFDISession(link: link, store: store, capabilities: [], phoneName: "iPhone",
+                              weatherProvider: nil) { _ in }
+    let pump = Task { for await frame in link.incomingFrames { await session.receive(frame) } }
+    defer { pump.cancel() }
+
+    try await session.sendProfile(asymmetricProfile(), now: Date(timeIntervalSince1970: 1_800_000_000))
+    try await waitUntil { link.sent.count == 4 }
+
+    let file = try #require(Data(hex: profileSettingsFile))
+    let sent = link.sent
+    #expect(sent.map(\.messageType) == [GFDIMessageID.createFile.rawValue, GFDIMessageID.uploadRequest.rawValue,
+                                        GFDIMessageID.fileTransferData.rawValue, GFDIMessageID.systemEvent.rawValue])
+    // CREATE_FILE: size, type 128, sub type 2 (settings), index 0, reserved, masks, path length 0, then the random file ID.
+    #expect(sent[0].payload.count == 22)
+    #expect(Array(sent[0].payload.prefix(14)) == [0x89, 0x00, 0x00, 0x00, 0x80, 0x02, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00])
+    // UPLOAD_REQUEST: the index the watch gave, the size, offset 0 and CRC seed 0.
+    #expect(Array(sent[1].payload) == [0x03, 0x00, 0x89, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+    // FILE_TRANSFER_DATA: flags, the running CRC over the chunk (0, because the file ends with its own CRC), offset 0, the file.
+    #expect(Array(sent[2].payload) == [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00] + Array(file))
+    // SYSTEM_EVENT sync complete ends the upload.
+    #expect(Array(sent[3].payload) == [0x00, 0x00])
+}
+
+@MainActor
+@Test func handshakeSendsTheStoredProfileAsSettingsFile() async throws {
+    let store = try makeStore()
+    store.pairedWatch = PairedWatch(id: UUID(), name: "Venu 4", catalogID: "garmin_venu_4")
+    store.userProfile = asymmetricProfile()
+    let link = FakeLink()
+    link.reply = acceptsUpload
+    link.watchSends(deviceInformationFrame())
+    link.watchSends(GFDIConfiguration(capabilities: [.sync, .gncs, .findMyWatch]).frame())
+
+    let service = GarminWatchService(store: store, makeLink: { _ in link })
+    try await waitUntil { link.framesSent(of: .createFile).count == 1 }
+
+    let createFile = try GFDICreateFile(frame: link.framesSent(of: .createFile)[0])
+    #expect(createFile.dataType == 128)
+    #expect(createFile.subType == 2)
+    #expect(createFile.fileSize == 137)
+    #expect(service.pairedWatch?.name == "Venu 4")
+}
+
 private extension Array where Element == GFDISessionOutput {
     var syncFinishes: Int {
         filter { output in

@@ -33,6 +33,7 @@ public final class SessionStore {
     }
 
     private static let pairedWatchKey = "garmin.pairedWatch"
+    private static let userProfileKey = "garmin.userProfile"
 
     public let directory: URL
     private let defaults: UserDefaults
@@ -74,6 +75,20 @@ public final class SessionStore {
                 defaults.set(data, forKey: Self.pairedWatchKey)
             } else {
                 defaults.removeObject(forKey: Self.pairedWatchKey)
+            }
+        }
+    }
+
+    /// The profile the user last saved. It is sent to the watch after every handshake.
+    public var userProfile: UserProfile? {
+        get {
+            defaults.data(forKey: Self.userProfileKey).flatMap { try? JSONDecoder().decode(UserProfile.self, from: $0) }
+        }
+        set {
+            if let newValue, let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: Self.userProfileKey)
+            } else {
+                defaults.removeObject(forKey: Self.userProfileKey)
             }
         }
     }
