@@ -42,6 +42,7 @@ public final class GarminWatchService: WatchService {
     public private(set) var pairedWatch: PairedWatch?
     public private(set) var battery: BatteryStatus?
     public private(set) var nearby: [NearbyWatch] = []
+    public private(set) var installedApps: [InstalledApp] = []
     /// The retained history: every imported activity and the samples of the last 30 days.
     public private(set) var latest: HealthBatch
     public private(set) var fileProgress: FileTransferProgress?
@@ -149,6 +150,7 @@ public final class GarminWatchService: WatchService {
         activeLink = nil
         setPairedWatch(nil)
         battery = nil
+        installedApps = []
         state = .noWatchPaired
     }
 
@@ -225,6 +227,29 @@ public final class GarminWatchService: WatchService {
         guard alarms.count <= alarmSlots else { throw GarminWatchError.unsupported("This watch has \(alarmSlots) alarm slots.") }
         guard let session else { throw GarminWatchError.notConnected }
         try await session.transferFile(AlarmFitEncoder.encode(alarms), subType: 2)
+    }
+
+    // MARK: - Install
+
+    public func refreshInstalledApps() async throws {
+        guard let session else { throw GarminWatchError.notConnected }
+        try await session.requestInstalledApps()
+    }
+
+    public func deleteInstalledApp(_ app: InstalledApp) async throws {
+        guard let session else { throw GarminWatchError.notConnected }
+        try await session.deleteInstalledApp(app)
+    }
+
+    public func installApp(_ prg: Data, progress: @escaping @MainActor (Double) -> Void) async throws {
+        guard let session else { throw GarminWatchError.notConnected }
+        try await session.installApp(prg, onProgress: progress)
+    }
+
+    public func installCourse(gpx: Data, name: String, includeTurns: Bool,
+                              progress: @escaping @MainActor (Double) -> Void) async throws {
+        guard let session else { throw GarminWatchError.notConnected }
+        try await session.installCourse(gpx: gpx, name: name, includeTurns: includeTurns, onProgress: progress)
     }
 
     // MARK: - Connection
@@ -339,6 +364,8 @@ public final class GarminWatchService: WatchService {
             state = .syncing(progress: fraction, detail: detail)
         case let .fileProgress(progress):
             fileProgress = progress
+        case let .installedApps(apps):
+            installedApps = apps
         case .syncFinished:
             if var watch = pairedWatch {
                 watch.lastSync = .now

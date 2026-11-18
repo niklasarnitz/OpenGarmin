@@ -48,6 +48,28 @@ targets:
         NSCalendarsFullAccessUsageDescription: Upcoming calendar events are shown on your watch.
         NSContactsUsageDescription: Emergency contacts can be shared with your watch for incident detection.
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: com.topografix.gpx
+            UTTypeDescription: GPX track
+            UTTypeConformsTo: [public.xml]
+            UTTypeTagSpecification:
+              public.filename-extension: [gpx]
+              public.mime-type: [application/gpx+xml]
+          - UTTypeIdentifier: com.garmin.connectiq.prg
+            UTTypeDescription: Connect IQ app
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [prg]
+        LSSupportsOpeningDocumentsInPlace: false
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: GPX track
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [com.topografix.gpx]
+          - CFBundleTypeName: Connect IQ app
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [com.garmin.connectiq.prg]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.niklasarnitz.opengarmin

@@ -33,6 +33,7 @@ struct DeviceView: View {
                 if watch.capabilities.contains(.realtimeSettings) || app.watch.alarmSlots > 0 {
                     watchSettings(watch)
                 }
+                installs
                 features
                 notifications(watch)
                 satelliteData
@@ -131,6 +132,16 @@ struct DeviceView: View {
                 } label: {
                     Label("Alarms", systemImage: "alarm.fill")
                 }
+            }
+        }
+    }
+
+    private var installs: some View {
+        MetricTile("Apps and courses", symbol: "square.and.arrow.down.fill", tint: Palette.amber) {
+            NavigationLink {
+                InstallView()
+            } label: {
+                Label("Install apps and courses", systemImage: "square.and.arrow.down")
             }
         }
     }

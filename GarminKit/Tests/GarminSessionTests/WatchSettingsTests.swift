@@ -93,7 +93,7 @@ private func rootScreenReply(_ frame: GFDIFrame) -> [GFDIFrame] {
 @MainActor
 private func settingsSession(_ link: FakeLink) throws -> (session: GFDISession, pump: Task<Void, Never>) {
     let store = try makeStore()
-    let session = GFDISession(link: link, store: store, capabilities: [], phoneName: "iPhone",
+    let session = GFDISession(link: link, importer: makeImporter(store), capabilities: [], phoneName: "iPhone",
                               weatherProvider: nil) { _ in }
     let pump = Task { for await frame in link.incomingFrames { await session.receive(frame) } }
     return (session, pump)
