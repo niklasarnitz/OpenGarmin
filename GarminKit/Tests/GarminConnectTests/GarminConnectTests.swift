@@ -94,9 +94,11 @@ import GarminModels
     }
 
     @Test func sleepReadsTheNightStagesAndScore() throws {
-        // Levels are 0 deep, 1 light, 2 REM, 3 awake. Code 7 is unknown and a level that ends before it starts is dropped.
+        // Levels 0 deep, 1 light. The DTO's totals (30 min awake, 10 min REM) match code 2's 30 minutes and code 3's 10,
+        // so 2 is awake and 3 is REM. Code 7 is unknown and a level that ends before it starts is dropped.
         let data = Data(#"""
         {"dailySleepDTO":{"sleepStartTimestampGMT":1761113400000,"sleepEndTimestampGMT":1761125400000,
+          "remSleepSeconds":600,"awakeSleepSeconds":1800,
           "sleepScores":{"overall":{"value":84},"totalDuration":{"value":90},"deepPercentage":{"value":70},
             "lightPercentage":{"value":55},"remPercentage":{"value":80},"awakeCount":{"value":65},"restlessness":{"value":40},
             "stress":{"value":30}}},
@@ -113,11 +115,19 @@ import GarminModels
         #expect(session.intervals == [
             SleepInterval(start: Date(timeIntervalSince1970: 1_761_113_400), end: Date(timeIntervalSince1970: 1_761_115_200), stage: .deep),
             SleepInterval(start: Date(timeIntervalSince1970: 1_761_115_200), end: Date(timeIntervalSince1970: 1_761_116_400), stage: .light),
-            SleepInterval(start: Date(timeIntervalSince1970: 1_761_116_400), end: Date(timeIntervalSince1970: 1_761_118_200), stage: .rem),
-            SleepInterval(start: Date(timeIntervalSince1970: 1_761_118_200), end: Date(timeIntervalSince1970: 1_761_118_800), stage: .awake),
+            SleepInterval(start: Date(timeIntervalSince1970: 1_761_116_400), end: Date(timeIntervalSince1970: 1_761_118_200), stage: .awake),
+            SleepInterval(start: Date(timeIntervalSince1970: 1_761_118_200), end: Date(timeIntervalSince1970: 1_761_118_800), stage: .rem),
         ])
         #expect(session.score == 84)
         #expect(session.scoreBreakdown == SleepScoreBreakdown(duration: 90, deep: 70, light: 55, rem: 80, awakenings: 65, restlessness: 40))
+    }
+
+    @Test func remAndAwakeCodesFollowTheNightsTotals() {
+        // 80 minutes of code 2 and 25 of code 3 against 78 REM and 27 awake: 2 is REM.
+        #expect(ConnectParsing.codeTwoIsREM(minutes: [2: 80, 3: 25], remMinutes: 78, awakeMinutes: 27))
+        #expect(!ConnectParsing.codeTwoIsREM(minutes: [2: 80, 3: 25], remMinutes: 27, awakeMinutes: 78))
+        // Without totals, the default seen on real accounts: 2 is awake.
+        #expect(!ConnectParsing.codeTwoIsREM(minutes: [2: 80, 3: 25], remMinutes: nil, awakeMinutes: nil))
     }
 
     @Test func aDayWithoutSleepIsNoSession() {

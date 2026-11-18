@@ -227,7 +227,7 @@ final class ConnectImportModel {
             if finished { break }
             progress = "Daily data, \(current.formatted(date: .abbreviated, time: .omitted))"
             let parts = calendar.dateComponents([.year, .month, .day], from: current)
-            let key = String(format: "connect-daily-v2-%04ld-%02ld-%02ld", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+            let key = String(format: "connect-daily-v3-%04ld-%02ld-%02ld", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
             if await watch.hasImported(key) {
                 emptyDays = 0
             } else {
