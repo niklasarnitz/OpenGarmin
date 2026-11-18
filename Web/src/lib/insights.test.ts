@@ -17,7 +17,8 @@ const base: Insight = {
 describe("insightHrefs", () => {
   it("opens the correlation view for both metrics over the finding's period", () => {
     const h = insightHrefs(base);
-    expect(h.correlation).toBe("#/correlations?x=sleepMinutes&y=hrv&from=2024-01-01&to=2024-06-30");
+    expect(h.correlation).toBe("#/correlations?x=sleepMinutes&y=hrv&lag=0&from=2024-01-01&to=2024-06-30");
+    expect(insightHrefs({ ...base, lagDays: 2 }).correlation).toContain("&lag=2&");
   });
 
   it("does not offer a correlation link for other kinds", () => {

@@ -111,5 +111,7 @@ export interface Insight {
   confidence: number;
   n: number;
   period: { from: string; to: string };
+  /** Correlations only: how many days `metrics[1]` follows `metrics[0]` (0–3). */
+  lagDays?: number;
   chart?: { type: "line" | "scatter" | "bar"; series: InsightSeries[] };
 }

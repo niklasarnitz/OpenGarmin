@@ -49,7 +49,7 @@ The server's insights (`/api/v1/insights`) are the curated layer. The overview s
 2. The `metrics` of an insight use the same keys as `/metrics`.
 3. An insight's `period` uses `YYYY-MM-DD` days, inclusive at both ends. The explorer and correlation links depend on this.
 4. An insight chart's `x` is a day string, an ISO 8601 instant, or a number. Points are rendered as they are.
-5. The server's correlation insights carry no lag. The link opens the correlation view at lag 0. A `lag` field would let it open at the lag the finding is about.
+5. Correlation insights carry an optional `lagDays` (0–3). The link opens the correlation view at that lag, or at lag 0 without it.
 
 ## Decisions for the owner
 
