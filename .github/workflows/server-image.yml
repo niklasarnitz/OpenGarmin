@@ -59,3 +59,29 @@ jobs:
           tags: |
             ghcr.io/niklasarnitz/opengarmin-server:sha-${{ github.sha }}
             ghcr.io/niklasarnitz/opengarmin-server:main
+
+  deploy:
+    name: Pin image in ops
+    needs: image
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/niklasarnitz/opengarmin-server
+      TAG: sha-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: niklasarnitz/ops
+          ssh-key: ${{ secrets.OPS_DEPLOY_KEY }}
+      # The push to ops triggers the Komodo deployment of stacks/opengarmin.
+      - name: Pin image tag in ops
+        run: |
+          file=stacks/opengarmin/compose.yaml
+          if [ ! -f "$file" ]; then echo "$file does not exist yet; nothing to pin"; exit 0; fi
+          sed -i -E "s#(image: ${IMAGE}):[^[:space:]]+#\1:${TAG}#" "$file"
+          grep -q "image: ${IMAGE}:${TAG}" "$file"
+          if git diff --quiet; then echo "Tag already pinned"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "opengarmin: deploy ${TAG}" -m "Source: https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
+          for i in 1 2 3; do git push && exit 0; git pull --rebase; done
+          exit 1
