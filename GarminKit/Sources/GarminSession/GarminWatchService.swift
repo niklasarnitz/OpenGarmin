@@ -31,9 +31,9 @@ public final class GarminWatchService: WatchService {
     @ObservationIgnored private let phoneName: String
     @ObservationIgnored private let weatherProvider: (@MainActor () async -> WeatherReport?)?
     @ObservationIgnored private let calendarProvider: (@MainActor () async -> [CalendarEvent])?
-    @ObservationIgnored private let makeLink: @MainActor (UUID) -> any GarminLink
+    @ObservationIgnored private let makeLink: @MainActor (UUID) -> any GarminServiceLink
     @ObservationIgnored private var session: GFDISession?
-    @ObservationIgnored private var activeLink: (any GarminLink)?
+    @ObservationIgnored private var activeLink: (any GarminServiceLink)?
     @ObservationIgnored private var connection: Task<Void, Never>?
     /// Bumped whenever the connection is replaced, so a stale connection stops touching the state.
     @ObservationIgnored private var generation = 0
@@ -49,7 +49,7 @@ public final class GarminWatchService: WatchService {
                 phoneName: String = "iPhone",
                 weather: (@MainActor () async -> WeatherReport?)? = nil,
                 calendar: (@MainActor () async -> [CalendarEvent])? = nil,
-                makeLink: @escaping @MainActor (UUID) -> any GarminLink = { BLEGarminLink(peripheralID: $0) }) {
+                makeLink: @escaping @MainActor (UUID) -> any GarminServiceLink = { BLEGarminLink(peripheralID: $0) }) {
         let (stream, sink) = AsyncStream.makeStream(of: WatchEvent.self)
         events = stream
         eventSink = sink
@@ -204,16 +204,19 @@ public final class GarminWatchService: WatchService {
         }
     }
 
-    private func makeSession(link: any GarminLink, generation current: Int) -> GFDISession {
-        GFDISession(link: link, store: store, capabilities: GFDISession.phoneCapabilities,
-                    phoneName: phoneName, weatherProvider: weatherProvider) { [weak self] output in
+    private func makeSession(link: any GarminServiceLink, generation current: Int) -> GFDISession {
+        // The catalog says whether Gadgetbridge uses the new sync protocol for this model. Unknown models
+        // (nil) decide from the watch's capabilities instead.
+        let newSync = GarminDeviceCatalog.all.first(where: { $0.id == pairedWatch?.catalogID })?.usesNewSyncProtocol
+        return GFDISession(link: link, store: store, capabilities: GFDISession.phoneCapabilities,
+                           phoneName: phoneName, newSyncProtocol: newSync, weatherProvider: weatherProvider) { [weak self] output in
             guard let self, current == self.generation else { return }
             self.handle(output)
         }
     }
 
     /// Feeds incoming frames to the session until the link fails or disconnects.
-    private func pump(_ link: any GarminLink, _ session: GFDISession) async {
+    private func pump(_ link: any GarminServiceLink, _ session: GFDISession) async {
         let frames = Task { @MainActor in
             for await frame in link.incomingFrames {
                 await session.receive(frame)

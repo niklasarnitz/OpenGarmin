@@ -10,6 +10,11 @@ import Foundation
     #expect(MLRControl.registerRequest(service: 1, reliable: true) == Data([0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2]))
 }
 
+@Test func closeHandleReplyNamesServiceAndHandle() {
+    // CLOSE_HANDLE_RESP for FILE_TRANSFER_2 (0x2018) on handle 4, status 0.
+    #expect(MLRControl.decode(Data([0, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0x18, 0x20, 4, 0])) == .closeHandle(service: 0x2018, handle: 4))
+}
+
 @Test func handshakeOpensGFDIOnTheHandleTheWatchAssigns() {
     var handshake = GFDIHandshake()
     // CLOSE_ALL_RESP, then the register request for GFDI goes out.

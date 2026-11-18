@@ -3,13 +3,36 @@ import Testing
 import GarminCore
 import GarminFIT
 import GarminModels
+import GarminProtobuf
 import GarminProtocol
 import GarminTransport
 @testable import GarminSession
 
+/// A file transfer service on the fake link. It records the phone's request, then sends the scripted payloads and closes.
+@MainActor
+final class FakeTransferChannel: GarminServiceChannel {
+    nonisolated let incoming: AsyncStream<Data>
+    private let sink: AsyncStream<Data>.Continuation
+    private let payloads: [Data]
+    private(set) var requests: [Data] = []
+
+    init(payloads: [Data]) {
+        self.payloads = payloads
+        let (stream, continuation) = AsyncStream.makeStream(of: Data.self)
+        incoming = stream
+        sink = continuation
+    }
+
+    func send(_ payload: Data) async throws {
+        requests.append(payload)
+        for part in payloads { sink.yield(part) }
+        sink.finish()
+    }
+}
+
 /// A link that records what the phone writes and answers it with the frames a scripted watch returns.
 @MainActor
-final class FakeLink: GarminLink {
+final class FakeLink: GarminServiceLink {
     nonisolated let states: AsyncStream<LinkState>
     nonisolated let incomingFrames: AsyncStream<Data>
     private let stateSink: AsyncStream<LinkState>.Continuation
@@ -19,6 +42,9 @@ final class FakeLink: GarminLink {
     private(set) var sent: [GFDIFrame] = []
     /// The scripted watch: the frames it sends back for each frame the phone writes.
     var reply: (@MainActor (GFDIFrame) -> [GFDIFrame])?
+    /// What the watch sends on each file transfer service the phone opens.
+    var transferPayloads: [Data] = []
+    private(set) var transfers: [FakeTransferChannel] = []
 
     init() {
         let (stateStream, stateContinuation) = AsyncStream.makeStream(of: LinkState.self)
@@ -53,6 +79,12 @@ final class FakeLink: GarminLink {
 
     func framesSent(of id: GFDIMessageID) -> [GFDIFrame] {
         sent.filter { $0.messageType == id.rawValue }
+    }
+
+    func openFileTransfer() async throws -> any GarminServiceChannel {
+        let channel = FakeTransferChannel(payloads: transferPayloads)
+        transfers.append(channel)
+        return channel
     }
 }
 
@@ -245,6 +277,116 @@ private let deviceInformationAck: [UInt8] = [
     let decoded = try FitDecoder.decode(uploaded)
     #expect(decoded.messages(26).count == 1)
     #expect(decoded.messages(27).count == 30)
+}
+
+/// A zlib stream of one stored block, as the watch sends a file: a two-byte zlib header, then deflate data.
+private func zlibStored(_ data: Data) -> Data {
+    let length = UInt16(data.count)
+    return Data([0x78, 0x01, 0x01, UInt8(length & 0xFF), UInt8(length >> 8),
+                 UInt8(~length & 0xFF), UInt8(~length >> 8)]) + data
+}
+
+/// A protobuf reply to a phone request, carried in one PROTOBUF_RESPONSE.
+private func protobufResponse(_ smart: GarminVivomovehr_Smart) -> GFDIFrame {
+    let bytes = try! smart.serializedData()
+    return GFDIProtobufResponse(chunk: GFDIProtobufChunk(requestID: 1, dataOffset: 0, totalLength: UInt32(bytes.count),
+                                                         data: bytes)).frame()
+}
+
+@MainActor
+@Test func newSyncListsPullsAndMarksFITFilesSynced() async throws {
+    let store = try makeStore()
+    let link = FakeLink()
+    let fit = activityFIT()
+    var uid = GDI_Proto_DataTypes_UUID()
+    uid.mostSignificant = 0x1111
+    uid.leastSignificant = 0x2222
+    var fitType = GDI_Proto_FileAccess_DataType()
+    fitType.gdxmlString = "FIT_TYPE_4"
+    var item = GDI_Proto_FileAccess_ItemReference()
+    item.uid = uid
+    item.dataType = fitType
+    item.dataSize = UInt64(fit.count)
+
+    // The watch lists one FIT file, names transfer handle 5 when it is pulled, and sends the file on that handle.
+    link.transferPayloads = [Data([0, 0, 0]), zlibStored(fit)]
+    link.reply = { frame in
+        guard frame.messageType == GFDIMessageID.protobufRequest.rawValue,
+              let request = try? GFDIProtobufRequest(frame: frame),
+              let smart = try? GarminVivomovehr_Smart(serializedBytes: request.chunk.data),
+              smart.hasFileAccessService else { return [] }
+        var list = GDI_Proto_FileAccess_ItemListResponse()
+        list.status = .success
+        list.items = [item]
+        var pull = GDI_Proto_FileAccess_PullItemDataResponse()
+        pull.result = .success
+        pull.transport = .multilinkTransportPipe
+        pull.transferHandle = 5
+        var service = GDI_Proto_FileAccess_Service()
+        if smart.fileAccessService.hasItemListRequest {
+            service.itemListResponse = list
+        } else if smart.fileAccessService.hasPullItemRequest {
+            service.pullItemResponse = pull
+        } else {
+            return []
+        }
+        var reply = GarminVivomovehr_Smart()
+        reply.fileAccessService = service
+        return [protobufResponse(reply)]
+    }
+
+    var outputs: [GFDISessionOutput] = []
+    let session = GFDISession(link: link, store: store, capabilities: [], phoneName: "iPhone",
+                              newSyncProtocol: true, weatherProvider: nil) { outputs.append($0) }
+    let pump = Task { for await frame in link.incomingFrames { await session.receive(frame) } }
+    defer { pump.cancel() }
+
+    await session.requestSync()
+    try await waitUntil { outputs.syncFinishes == 1 }
+
+    // The phone asks for the list, pulls the file, and marks it synced, with exactly these requests.
+    var synced = GDI_Proto_DataTypes_UUID()
+    synced.mostSignificant = 42405
+    synced.leastSignificant = 42405
+    var listRequest = GDI_Proto_FileAccess_ItemListRequest()
+    listRequest.excludeAllFlags = [synced]
+    listRequest.getFlags = [synced]
+    var pullRequest = GDI_Proto_FileAccess_PullItemDataRequest()
+    pullRequest.item = item
+    pullRequest.priority = 24
+    pullRequest.supportedTransports = [.multilinkTransportPipe]
+    pullRequest.offset = 0
+    pullRequest.requestedCompressionWindow = 15
+    var modify = GDI_Proto_FileAccess_ModifyFlagsRequest()
+    modify.uid = uid
+    modify.setFlags = [synced]
+    var listService = GDI_Proto_FileAccess_Service()
+    listService.itemListRequest = listRequest
+    var pullService = GDI_Proto_FileAccess_Service()
+    pullService.pullItemRequest = pullRequest
+    var modifyService = GDI_Proto_FileAccess_Service()
+    modifyService.modifyFlagsRequest = modify
+    let expected = [listService, pullService, modifyService].map { service -> GarminVivomovehr_Smart in
+        var smart = GarminVivomovehr_Smart()
+        smart.fileAccessService = service
+        return smart
+    }
+    let sent = try link.framesSent(of: .protobufRequest).map { frame -> GarminVivomovehr_Smart in
+        let request = try GFDIProtobufRequest(frame: frame)
+        return try GarminVivomovehr_Smart(serializedBytes: request.chunk.data)
+    }
+    #expect(sent == expected)
+
+    // The file is read from transfer handle 5 with the phone's request, and it is not downloaded the legacy way.
+    #expect(link.transfers.map(\.requests) == [[Data([0, 0, 5, 0, 0, 0])]])
+    #expect(link.framesSent(of: .downloadRequest).isEmpty)
+
+    let imported = outputs.compactMap { output -> HealthBatch? in
+        if case let .event(.healthBatchImported(batch)) = output { return batch }
+        return nil
+    }
+    #expect(imported.map { $0.steps.map(\.value) } == [[50]])
+    #expect(store.history.steps.map(\.value) == [50])
 }
 
 private extension Array where Element == GFDISessionOutput {

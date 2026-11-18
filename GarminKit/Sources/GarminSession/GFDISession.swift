@@ -32,10 +32,14 @@ final class GFDISession {
     private static let defaultMaxPacketSize = 375
     private static let uploadTimeout: Duration = .seconds(120)
 
-    private let link: any GarminLink
+    private typealias Item = GDI_Proto_FileAccess_ItemReference
+
+    private let link: any GarminServiceLink
     private let store: SessionStore
     private let capabilities: Set<GarminCapability>
     private let phoneName: String
+    /// The catalog's choice for this model. nil when the catalog does not know the model.
+    private let newSyncProtocol: Bool?
     private let weatherProvider: (@MainActor () async -> WeatherReport?)?
     private let output: @MainActor (GFDISessionOutput) -> Void
 
@@ -53,6 +57,13 @@ final class GFDISession {
     private var syncTotal = 0
     private var syncDone = 0
     private var upload: Upload?
+
+    // New sync protocol: the files are listed and pulled as protobuf messages, and their bytes arrive on a file transfer service.
+    private var listing = false
+    private var nextTransactionID: UInt32?
+    private var pendingItems: [Item] = []
+    private var currentItem: Item?
+    private var transferTask: Task<Void, Never>?
 
     /// A file the watch can hand over, from a directory entry or a FILE_AVAILABLE message.
     fileprivate struct WatchFile: Sendable {
@@ -84,13 +95,16 @@ final class GFDISession {
         let continuation: CheckedContinuation<Void, Error>
     }
 
-    init(link: any GarminLink, store: SessionStore, capabilities: Set<GarminCapability>, phoneName: String,
+    /// - Parameter newSyncProtocol: whether the new sync protocol is used. nil decides from the watch's capabilities.
+    init(link: any GarminServiceLink, store: SessionStore, capabilities: Set<GarminCapability>, phoneName: String,
+         newSyncProtocol: Bool? = nil,
          weatherProvider: (@MainActor () async -> WeatherReport?)?,
          output: @escaping @MainActor (GFDISessionOutput) -> Void) {
         self.link = link
         self.store = store
         self.capabilities = capabilities
         self.phoneName = phoneName
+        self.newSyncProtocol = newSyncProtocol
         self.weatherProvider = weatherProvider
         self.output = output
     }
@@ -101,6 +115,11 @@ final class GFDISession {
         download = nil
         pending = []
         isSyncing = false
+        transferTask?.cancel()
+        transferTask = nil
+        listing = false
+        pendingItems = []
+        currentItem = nil
     }
 
     // MARK: - Receiving
@@ -301,8 +320,13 @@ final class GFDISession {
         isSyncing = true
         syncTotal = 0
         syncDone = 0
-        download = Download(file: nil)
         output(.progress(0, "Listing activities"))
+        if usesNewSync {
+            listing = true
+            await sendFileList()
+            return
+        }
+        download = Download(file: nil)
         await send(GFDIDownloadRequest(fileIndex: 0, dataOffset: 0, mode: .new, crcSeed: 0, dataSize: 0))
     }
 
@@ -338,7 +362,7 @@ final class GFDISession {
         download = nil
         let bytes = Data(finished.data.prefix(size))
         if let file = finished.file {
-            await importFile(file, bytes: bytes)
+            if importFile(key(file), bytes: bytes) { await archive(file) }
         } else {
             let files = Self.directoryEntries(bytes).filter { $0.isFIT }
             pending += files
@@ -365,26 +389,25 @@ final class GFDISession {
         await finishSync()
     }
 
-    private func importFile(_ file: WatchFile, bytes: Data) async {
+    /// Imports one FIT file. Returns whether the watch may release it: a file that does not decode is recorded as
+    /// imported, so it is not fetched again, while a file that cannot be stored stays on the watch for the next sync.
+    private func importFile(_ key: String, bytes: Data) -> Bool {
         let batch: HealthBatch
         do {
             batch = FitExtractor.extract(try FitDecoder.decode(bytes), unitNumber: deviceInfo?.unitNumber)
         } catch {
-            // A file that does not decode would be fetched again on every sync, so it is recorded as imported.
-            output(.event(.log("Skipped FIT file \(file.index): \(error)")))
-            try? store.markImported(key(file))
-            await archive(file)
-            return
+            output(.event(.log("Skipped FIT file \(key): \(error)")))
+            try? store.markImported(key)
+            return true
         }
         do {
-            try store.record(batch, fileKey: key(file), fit: bytes)
+            try store.record(batch, fileKey: key, fit: bytes)
         } catch {
-            // Not archived, so the watch lists it again and the next sync retries.
-            output(.event(.log("Could not store FIT file \(file.index): \(error)")))
-            return
+            output(.event(.log("Could not store FIT file \(key): \(error)")))
+            return false
         }
         output(.event(.healthBatchImported(batch)))
-        await archive(file)
+        return true
     }
 
     private func finishSync() async {
@@ -409,6 +432,178 @@ final class GFDISession {
             files.append(file)
         }
         return files
+    }
+
+    // MARK: - New sync protocol (file access service)
+
+    private var usesNewSync: Bool {
+        newSyncProtocol ?? watchCapabilities.contains(.sync2)
+    }
+
+    /// Gadgetbridge's SYNCED flag: set on a file once it has been pulled, and listed files exclude it.
+    private static let syncedFlag: UInt64 = 42405
+
+    private static func syncedUUID() -> GDI_Proto_DataTypes_UUID {
+        var uuid = GDI_Proto_DataTypes_UUID()
+        uuid.mostSignificant = syncedFlag
+        uuid.leastSignificant = syncedFlag
+        return uuid
+    }
+
+    private static func fileAccess(_ service: GDI_Proto_FileAccess_Service) -> GarminVivomovehr_Smart {
+        var smart = GarminVivomovehr_Smart()
+        smart.fileAccessService = service
+        return smart
+    }
+
+    private func receiveFileAccess(_ service: GDI_Proto_FileAccess_Service, requestID: UInt16) async {
+        guard usesNewSync else { return }
+        if service.hasItemListResponse { await receiveItemList(service.itemListResponse) }
+        if service.hasPullItemResponse { await receivePullResponse(service.pullItemResponse) }
+        if service.hasItemAddedNotification {
+            isSyncing = true
+            for item in service.itemAddedNotification.items { addItem(item) }
+            await processNextItem()
+        }
+        if service.hasTransferStatusRequest {
+            var response = GDI_Proto_FileAccess_TransferStatusResponse()
+            response.nextTransferPriority = 1
+            var reply = GDI_Proto_FileAccess_Service()
+            reply.transferStatusResponse = response
+            await sendProtobufResponse(Self.fileAccess(reply), requestID: requestID)
+        }
+        if service.hasSyncButtonNotification { await requestSync() }
+    }
+
+    /// Asks for one page of the file list. Without a session the list starts at the last page the watch named.
+    private func sendFileList(sessionID: UInt32? = nil) async {
+        let synced = Self.syncedUUID()
+        var request = GDI_Proto_FileAccess_ItemListRequest()
+        request.excludeAllFlags = [synced]
+        request.getFlags = [synced]
+        if let sessionID {
+            request.sessionID = sessionID
+        } else if let nextTransactionID {
+            request.transactionID = nextTransactionID
+        }
+        var service = GDI_Proto_FileAccess_Service()
+        service.itemListRequest = request
+        try? await sendProtobufRequest(Self.fileAccess(service))
+    }
+
+    /// Queues the FIT files of a page. Other file types are not pulled, so they are never marked as synced.
+    private func addItem(_ item: Item) {
+        guard item.dataType.hasGdxmlString, item.dataType.gdxmlString.hasPrefix("FIT_TYPE_") else { return }
+        pendingItems.append(item)
+        syncTotal += 1
+    }
+
+    private func receiveItemList(_ response: GDI_Proto_FileAccess_ItemListResponse) async {
+        for item in response.items { addItem(item) }
+        if response.hasNextTransactionID { nextTransactionID = response.nextTransactionID }
+        if response.hasSessionID {
+            await sendFileList(sessionID: response.sessionID)
+        } else {
+            listing = false
+            await processNextItem()
+        }
+    }
+
+    /// Pulls the next file that is not imported yet. Imported files are only marked as synced on the watch.
+    private func processNextItem() async {
+        guard currentItem == nil else { return }
+        while !pendingItems.isEmpty {
+            let item = pendingItems.removeFirst()
+            syncDone += 1
+            if store.isImported(itemKey(item)) {
+                await markSynced(item)
+                continue
+            }
+            currentItem = item
+            output(.progress(Double(syncDone) / Double(max(syncTotal, 1)), "Downloading activity \(syncDone) of \(syncTotal)"))
+            try? await sendProtobufRequest(Self.pullRequest(item))
+            return
+        }
+        guard !listing else { return }
+        await finishSync()
+    }
+
+    private func receivePullResponse(_ response: GDI_Proto_FileAccess_PullItemDataResponse) async {
+        guard let item = currentItem else { return }
+        guard response.result == .success else {
+            currentItem = nil
+            await processNextItem()
+            return
+        }
+        let handle = response.transferHandle
+        transferTask = Task { await self.fetchCurrent(item, handle: handle) }
+    }
+
+    /// Reads the pulled file from its transfer service, imports it, and marks it as synced on the watch.
+    private func fetchCurrent(_ item: Item, handle: UInt32) async {
+        let bytes = try? await transfer(handle: handle)
+        guard !Task.isCancelled else { return }
+        if let bytes, importFile(itemKey(item), bytes: bytes) {
+            await markSynced(item)
+        }
+        currentItem = nil
+        await processNextItem()
+    }
+
+    /// Opens a transfer service and asks for the file with the handle the watch gave it. The watch answers with a
+    /// 0,0,0 marker and then the zlib-compressed file, and closes the service when it is done.
+    private func transfer(handle: UInt32) async throws -> Data? {
+        let channel = try await link.openFileTransfer()
+        var request = ByteWriter()
+        request.writeUInt8(0)
+        request.writeUInt8(0)
+        request.writeUInt16(UInt16(truncatingIfNeeded: handle))
+        request.writeUInt8(0)
+        request.writeUInt8(0)
+        try await channel.send(request.data)
+
+        var compressed = Data()
+        var started = false
+        for await payload in channel.incoming {
+            guard started else {
+                guard payload == Data([0, 0, 0]) else { return nil }
+                started = true
+                continue
+            }
+            compressed.append(payload)
+        }
+        return Self.inflate(compressed)
+    }
+
+    /// Garmin sends a zlib stream: a two-byte header, then deflate data. Foundation's `.zlib` takes the deflate data alone.
+    private static func inflate(_ compressed: Data) -> Data? {
+        guard compressed.count > 2 else { return nil }
+        return try? (Data(compressed.dropFirst(2)) as NSData).decompressed(using: .zlib) as Data
+    }
+
+    private func markSynced(_ item: Item) async {
+        var modify = GDI_Proto_FileAccess_ModifyFlagsRequest()
+        modify.uid = item.uid
+        modify.setFlags = [Self.syncedUUID()]
+        var service = GDI_Proto_FileAccess_Service()
+        service.modifyFlagsRequest = modify
+        try? await sendProtobufRequest(Self.fileAccess(service))
+    }
+
+    private static func pullRequest(_ item: Item) -> GarminVivomovehr_Smart {
+        var pull = GDI_Proto_FileAccess_PullItemDataRequest()
+        pull.item = item
+        pull.priority = 24
+        pull.supportedTransports = [.multilinkTransportPipe]
+        pull.offset = 0
+        pull.requestedCompressionWindow = 15
+        var service = GDI_Proto_FileAccess_Service()
+        service.pullItemRequest = pull
+        return fileAccess(service)
+    }
+
+    private func itemKey(_ item: Item) -> String {
+        "\(deviceInfo?.unitNumber ?? 0)-\(item.uid.mostSignificant)-\(item.uid.leastSignificant)"
     }
 
     // MARK: - Upload (phone to watch)
@@ -495,6 +690,9 @@ final class GFDISession {
             let status = smart.deviceStatusService.remoteDeviceBatteryStatusResponse
             let charging = status.batteryStatus == .charging || status.batteryStatus == .fullyCharged
             output(.event(.battery(BatteryStatus(percent: Int(status.currentBatteryLevel), isCharging: charging))))
+        }
+        if smart.hasFileAccessService {
+            await receiveFileAccess(smart.fileAccessService, requestID: chunk.requestID)
         }
     }
 
