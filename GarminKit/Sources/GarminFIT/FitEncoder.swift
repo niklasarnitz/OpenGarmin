@@ -48,7 +48,11 @@ public enum FitEncoder {
             }
             body.writeBytes(dataMessage(localType: localType, message, bigEndian: false))
         }
+        return wrap(body.bytes, protocolVersion: protocolVersion, profileVersion: profileVersion)
+    }
 
+    /// A FIT file around `body`: the 14-byte header with its CRC, the body, and the file CRC.
+    public static func wrap(_ body: [UInt8], protocolVersion: UInt8 = 0x10, profileVersion: UInt16 = 21117) -> Data {
         var file = ByteWriter()
         file.writeUInt8(14)
         file.writeUInt8(protocolVersion)
@@ -56,7 +60,7 @@ public enum FitEncoder {
         file.writeUInt32(UInt32(body.count))
         file.writeBytes(Array(".FIT".utf8))
         file.writeUInt16(GarminCRC.compute(file.bytes))
-        file.writeBytes(body.bytes)
+        file.writeBytes(body)
         file.writeUInt16(GarminCRC.compute(file.bytes))
         return file.data
     }

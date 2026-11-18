@@ -13,6 +13,18 @@ public enum GarminWatchError: Error, Equatable, Sendable {
     case unsupported(String)
 }
 
+extension GarminWatchError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .notConnected: "The watch is not connected."
+        case .busy: "The watch is busy with another transfer."
+        case .timedOut: "The watch did not answer in time."
+        case let .uploadFailed(reason): "The upload failed: \(reason)"
+        case let .unsupported(reason): reason
+        }
+    }
+}
+
 /// The device service the UI talks to. It owns the link to the paired watch, keeps the connection alive with
 /// backoff, and turns the session's output into the state and events the app shows.
 @MainActor
@@ -150,8 +162,11 @@ public final class GarminWatchService: WatchService {
         try await session.sendWorkout(plan)
     }
 
+    /// Saves the profile, then sends it. A profile that could not be sent stays saved and goes out after the next handshake.
     public func updateProfile(_ profile: UserProfile) async throws {
-        throw GarminWatchError.unsupported("Sending the user profile is not ported yet")
+        store.userProfile = profile
+        guard let session else { throw GarminWatchError.notConnected }
+        try await session.sendProfile(profile)
     }
 
     public func setTime() async throws {
@@ -249,9 +264,18 @@ public final class GarminWatchService: WatchService {
             }
             state = .connected
             let session = session
+            let profile = store.userProfile
             Task { [weak self] in
                 if let calendar = self?.calendarProvider {
                     session?.setCalendar(await calendar())
+                }
+                // The profile goes first: its upload ends with a sync-complete event, which must not cut the sync short.
+                if let profile {
+                    do {
+                        try await session?.sendProfile(profile)
+                    } catch {
+                        self?.eventSink.yield(.log("Could not send the user profile: \(error)"))
+                    }
                 }
                 await session?.requestSync()
             }

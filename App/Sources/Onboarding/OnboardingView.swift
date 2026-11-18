@@ -14,6 +14,7 @@ struct OnboardingView: View {
     @State private var gender: UserProfile.Gender?
     @State private var heightCm = 178.0
     @State private var weightKg = 75.0
+    @State private var profileError: String?
 
     enum Step: Int, CaseIterable {
         case welcome, sync, permissions, search, pair, profile, firstSync, done
@@ -84,6 +85,11 @@ struct OnboardingView: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
             }
+            if step == .profile && profileError != nil {
+                Button("Continue anyway") { go(1) }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -121,8 +127,13 @@ struct OnboardingView: View {
             Task { try? await app.watch.pair(chosen) }
         case .profile:
             Task {
-                try? await app.watch.updateProfile(profile)
-                go(1)
+                do {
+                    try await app.watch.updateProfile(profile)
+                    profileError = nil
+                    go(1)
+                } catch {
+                    profileError = "Couldn't send the profile to the watch: \(error.localizedDescription) It is saved and goes to the watch when it next connects."
+                }
             }
         default:
             go(1)
@@ -339,6 +350,11 @@ struct OnboardingView: View {
                 if let gender = defaults.gender { self.gender = gender }
                 if let heightCm = defaults.heightCm { self.heightCm = heightCm }
                 if let weightKg = defaults.weightKg { self.weightKg = weightKg }
+            }
+            if let profileError {
+                Text(profileError)
+                    .font(.footnote)
+                    .foregroundStyle(Palette.ember)
             }
         }
     }

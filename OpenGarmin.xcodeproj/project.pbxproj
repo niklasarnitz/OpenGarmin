@@ -17,6 +17,7 @@
 		597A01BE7065255C16E1461B /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B1AF0BF3C99B090A472DEC2 /* TodayView.swift */; };
 		60C0672559EBB5D2A86DB621 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0BAF61680880105D7D7002B /* OnboardingView.swift */; };
 		6F189C3A966DAFCA9748215B /* WorkoutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D378DA9CDCE4CA18315C54 /* WorkoutsView.swift */; };
+		6FAD24C777526C3410D2D5D8 /* ProfileEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B8E621E4415862DE0E261CE /* ProfileEditorView.swift */; };
 		7E81CE93BC975632B0473887 /* DeviceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D61366771DCE92B050FFAD6 /* DeviceView.swift */; };
 		A539AEFF57B554D63409BB4F /* OpenGarminApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66304C8BFAC98948490CDE1D /* OpenGarminApp.swift */; };
 		B79D296E9E6C12F3E5AA0026 /* ActivityDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC6C608D1507F9F30D4E2644 /* ActivityDetailView.swift */; };
@@ -32,6 +33,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0B8E621E4415862DE0E261CE /* ProfileEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEditorView.swift; sourceTree = "<group>"; };
 		0DAC9E480BBAC0305C82B88C /* GarminKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = GarminKit; path = GarminKit; sourceTree = SOURCE_ROOT; };
 		12AAAB9884D5CEE58BF72E6B /* HealthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthStore.swift; sourceTree = "<group>"; };
 		1F779ECF46FBB507B40C8560 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -89,6 +91,7 @@
 			isa = PBXGroup;
 			children = (
 				4D61366771DCE92B050FFAD6 /* DeviceView.swift */,
+				0B8E621E4415862DE0E261CE /* ProfileEditorView.swift */,
 			);
 			path = Device;
 			sourceTree = "<group>";
@@ -300,6 +303,7 @@
 				C4EC880A3B825FB3CE3AEDB0 /* PhoneSync.swift in Sources */,
 				BA4D98E1263EDD31DDC35BC4 /* PreviewData.swift in Sources */,
 				B7F3F3FBFDA8A56D86750994 /* PreviewWatchService.swift in Sources */,
+				6FAD24C777526C3410D2D5D8 /* ProfileEditorView.swift in Sources */,
 				CE358DDCA24CFBB8822ACC76 /* SleepDetailView.swift in Sources */,
 				CB1DD135F3D32E424150C26D /* Theme.swift in Sources */,
 				597A01BE7065255C16E1461B /* TodayView.swift in Sources */,

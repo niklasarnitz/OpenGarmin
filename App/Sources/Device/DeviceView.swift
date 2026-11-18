@@ -28,6 +28,7 @@ struct DeviceView: View {
             VStack(spacing: 16) {
                 faceCard(watch)
                 connection(watch)
+                profile
                 features
                 information(watch)
                 Button("Forget watch", systemImage: "trash", role: .destructive) { confirmForget = true }
@@ -94,6 +95,16 @@ struct DeviceView: View {
             }
             .labelStyle(.iconOnly)
             .controlSize(.regular)
+        }
+    }
+
+    private var profile: some View {
+        MetricTile("Profile", symbol: "person.crop.circle.fill", tint: Palette.dusk) {
+            NavigationLink {
+                ProfileEditorView()
+            } label: {
+                Label("Edit profile and send to watch", systemImage: "pencil")
+            }
         }
     }
 
