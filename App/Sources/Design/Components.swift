@@ -174,10 +174,13 @@ struct SeriesChart: View {
     private var layout: (segments: [[PointSample]], gaps: [DateInterval]) {
         guard zeroMeansNoData else { return ([ChartSmoothing.smoothed(points)], []) }
         let bucket = ChartSmoothing.bucketWidth(forSpan: span) ?? 0
+        let whole = domain?.duration ?? span
         // Stress and Body Battery come every few minutes; half an hour without any reading (power saving, watch
-        // off) is a gap, as is anything longer than two smoothing buckets on multi-day charts.
-        let split = ChartGaps.split(points, maxSpacing: max(1800, 2 * bucket))
-        let shortest = max(600, bucket)
+        // off) is a gap, as is anything longer than two smoothing buckets on multi-day charts. An activity of an
+        // hour records every second, so its limits shrink with its length: a 72-second hole, a 36-second stop.
+        let spacing = max(min(1800, whole / 50), 2 * bucket)
+        let split = ChartGaps.split(points, maxSpacing: spacing)
+        let shortest = max(min(600, whole / 100), bucket)
         var gaps = split.gaps.filter { $0.duration >= shortest }
         let readings = split.segments.joined().map(\.date)
         if let domain {
@@ -185,7 +188,7 @@ struct SeriesChart: View {
             if let first = readings.min(), first.timeIntervalSince(domain.start) > shortest {
                 gaps.append(DateInterval(start: domain.start, end: first))
             }
-            if let last = readings.max(), end.timeIntervalSince(last) > max(1800, 2 * bucket) {
+            if let last = readings.max(), end.timeIntervalSince(last) > spacing {
                 gaps.append(DateInterval(start: last, end: end))
             }
             if readings.isEmpty, end > domain.start { gaps.append(DateInterval(start: domain.start, end: end)) }
@@ -205,8 +208,18 @@ struct SeriesChart: View {
         return (segments.map(ChartSmoothing.smoothed), gaps)
     }
 
+    /// The y range of the drawn values with a tenth of their spread above and below, so a ride between 210 and 260 m
+    /// fills the chart instead of sitting on a zero baseline.
+    private func yDomain(_ segments: [[PointSample]]) -> ClosedRange<Double> {
+        let values = segments.joined().map(\.value)
+        guard let low = values.min(), let high = values.max() else { return 0...1 }
+        let pad = high > low ? (high - low) * 0.1 : max(abs(high) * 0.05, 1)
+        return (low - pad)...(high + pad)
+    }
+
     private var chart: some View {
         let layout = layout
+        let yRange = yDomain(layout.segments)
         return Chart {
             ForEach(layout.gaps.indices, id: \.self) { index in
                 let gap = layout.gaps[index]
@@ -223,8 +236,9 @@ struct SeriesChart: View {
             }
             ForEach(layout.segments.indices, id: \.self) { segment in
                 ForEach(layout.segments[segment], id: \.date) { point in
-                    AreaMark(x: .value("Time", point.date), y: .value(label, point.value),
-                             series: .value("Segment", segment))
+                    // The area starts at the bottom of the scaled range, not at zero.
+                    AreaMark(x: .value("Time", point.date), yStart: .value(label, yRange.lowerBound),
+                             yEnd: .value(label, point.value), series: .value("Segment", segment))
                         .foregroundStyle(LinearGradient(colors: [tint.opacity(0.32), tint.opacity(0)],
                                                         startPoint: .top, endPoint: .bottom))
                         .interpolationMethod(.monotone)
@@ -241,7 +255,7 @@ struct SeriesChart: View {
                 }
             }
         }
-        .chartYScale(domain: .automatic(includesZero: false))
+        .chartYScale(domain: yRange)
         .chartXScale(domain: (domain?.start ?? points.map(\.date).min()!)...(domain?.end ?? points.map(\.date).max()!))
         .chartXAxis {
             AxisMarks(values: .automatic(desiredCount: 4)) { _ in
