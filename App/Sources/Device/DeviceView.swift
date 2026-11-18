@@ -30,6 +30,9 @@ struct DeviceView: View {
                 faceCard(watch)
                 connection(watch)
                 profile
+                if watch.capabilities.contains(.realtimeSettings) || app.watch.alarmSlots > 0 {
+                    watchSettings(watch)
+                }
                 features
                 notifications(watch)
                 satelliteData
@@ -107,6 +110,26 @@ struct DeviceView: View {
                 ProfileEditorView()
             } label: {
                 Label("Edit profile and send to watch", systemImage: "pencil")
+            }
+        }
+    }
+
+    /// The settings the watch defines (when it has realtime settings), and the alarms the phone sends (when it takes them).
+    private func watchSettings(_ watch: PairedWatch) -> some View {
+        MetricTile("Watch settings", symbol: "gearshape.fill", tint: Palette.dusk) {
+            if watch.capabilities.contains(.realtimeSettings) {
+                NavigationLink {
+                    WatchSettingsView(screenID: WatchSettingsScreen.rootID, fallbackTitle: "Watch settings")
+                } label: {
+                    Label("Display, alerts and activity tracking", systemImage: "slider.horizontal.3")
+                }
+            }
+            if app.watch.alarmSlots > 0 {
+                NavigationLink {
+                    WatchAlarmsView()
+                } label: {
+                    Label("Alarms", systemImage: "alarm.fill")
+                }
             }
         }
     }

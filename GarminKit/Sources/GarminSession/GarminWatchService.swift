@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import GarminDevices
+import GarminFIT
 import GarminModels
 import GarminTransport
 
@@ -175,6 +176,32 @@ public final class GarminWatchService: WatchService {
     public func setTime() async throws {
         guard let session else { throw GarminWatchError.notConnected }
         try await session.setTime()
+    }
+
+    // MARK: - Watch settings and alarms
+
+    /// Gadgetbridge's slot count: the catalog's fixed count, else 0 for watches with realtime settings and 10 for the rest.
+    public var alarmSlots: Int {
+        let fixed = GarminDeviceCatalog.all.first { $0.id == pairedWatch?.catalogID }?.alarmSlotCount
+        return fixed ?? (pairedWatch?.capabilities.contains(.realtimeSettings) == true ? 0 : 10)
+    }
+
+    public func settingsScreen(_ id: UInt32) async throws -> WatchSettingsScreen {
+        guard let session else { throw GarminWatchError.notConnected }
+        return try await session.readSettingsScreen(id)
+    }
+
+    public func changeSetting(screen: UInt32, entryID: UInt32, _ change: WatchSettingChange) async throws -> WatchSettingsOutcome {
+        guard let session else { throw GarminWatchError.notConnected }
+        return try await session.changeSetting(screenID: screen, entryID: entryID, change)
+    }
+
+    /// Sends the alarms as a settings file, which replaces the watch's alarms. Watches without alarm slots keep them in their settings.
+    public func setAlarms(_ alarms: [WatchAlarm]) async throws {
+        guard alarmSlots > 0 else { throw GarminWatchError.unsupported("This watch keeps its alarms in its watch settings.") }
+        guard alarms.count <= alarmSlots else { throw GarminWatchError.unsupported("This watch has \(alarmSlots) alarm slots.") }
+        guard let session else { throw GarminWatchError.notConnected }
+        try await session.transferFile(AlarmFitEncoder.encode(alarms), subType: 2)
     }
 
     // MARK: - Connection

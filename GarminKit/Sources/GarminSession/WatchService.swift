@@ -74,4 +74,9 @@ public protocol WatchService: AnyObject, Observable {
     func sendWorkout(_ plan: WorkoutPlan) async throws
     func updateProfile(_ profile: UserProfile) async throws
     func setTime() async throws
+    /// Alarm slots the watch takes from the phone. 0 when the watch keeps its alarms in its settings screens.
+    var alarmSlots: Int { get }
+    func settingsScreen(_ id: UInt32) async throws -> WatchSettingsScreen
+    func changeSetting(screen: UInt32, entryID: UInt32, _ change: WatchSettingChange) async throws -> WatchSettingsOutcome
+    func setAlarms(_ alarms: [WatchAlarm]) async throws
 }
