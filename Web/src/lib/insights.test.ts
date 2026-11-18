@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Insight } from "../api/types";
 import { insightHrefs } from "./insights";
+import { parseDay, type Day } from "./time";
+
+/** A day literal, checked. */
+const day = (text: string): Day => parseDay(text) ?? (() => { throw new Error(text); })();
 
 const base: Insight = {
   id: "x",
@@ -11,7 +15,7 @@ const base: Insight = {
   strength: 0.4,
   confidence: 0.9,
   n: 300,
-  period: { from: "2024-01-01", to: "2024-06-30" },
+  period: { from: day("2024-01-01"), to: day("2024-06-30") },
 };
 
 describe("insightHrefs", () => {

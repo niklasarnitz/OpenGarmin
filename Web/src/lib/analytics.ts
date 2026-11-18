@@ -23,9 +23,9 @@ function bucketStart(day: Day, gran: Gran): Day {
     case "week":
       return weekStart(day);
     case "month":
-      return `${day.slice(0, 7)}-01`;
+      return `${day.slice(0, 7)}-01` as Day;
     case "year":
-      return `${day.slice(0, 4)}-01-01`;
+      return `${day.slice(0, 4)}-01-01` as Day;
   }
 }
 

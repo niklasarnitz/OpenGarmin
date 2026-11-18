@@ -1,5 +1,8 @@
-import type { Activity, DailyPoint, Insight, MeResponse, MetricInfo, SleepSession } from "./types";
+import { z } from "zod";
+import type { Day } from "../lib/time";
 import * as mock from "../mock";
+import * as S from "./schema";
+import type { ActivityDetail, ActivityPage, DailyPoint, Insight, MeResponse, MetricInfo, SleepSession } from "./types";
 
 export const isMock =
   import.meta.env.VITE_MOCK === "1" || new URLSearchParams(location.search).has("mock");
@@ -13,41 +16,47 @@ export class ApiError extends Error {
   }
 }
 
-async function getJSON<T>(path: string, params: Record<string, string | number | undefined> = {}): Promise<T> {
+type Params = Record<string, string | number | undefined>;
+
+/** Fails with the server's `reason` for an error status, and with the bad field's path when the body breaks the contract. */
+async function request<T extends z.ZodType>(path: string, schema: T, init: RequestInit, params: Params = {}): Promise<z.output<T>> {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined) query.set(key, String(value));
   }
   const qs = query.toString();
-  const suffix = qs ? `?${qs}` : "";
-  const response = await fetch(`/api/v1${path}${suffix}`, {
+  const response = await fetch(`/api/v1${path}${qs ? `?${qs}` : ""}`, {
+    ...init,
     credentials: "same-origin",
-    headers: { Accept: "application/json" },
+    headers: { Accept: "application/json", ...init.headers },
   });
-  if (!response.ok) throw new ApiError(response.status, `${response.status} ${path}`);
-  return (await response.json()) as T;
+  if (!response.ok) {
+    const body = S.ErrorBody.safeParse(await response.json().catch(() => null));
+    throw new ApiError(response.status, `${response.status} ${path}: ${body.success ? body.data.reason : response.statusText}`);
+  }
+  const parsed = schema.safeParse(await response.json());
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    throw new ApiError(0, `Unexpected response from ${path} at ${issue?.path.join(".") || "(root)"}: ${issue?.message}`);
+  }
+  return parsed.data;
 }
 
-async function postJSON<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`/api/v1${path}`, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) throw new ApiError(response.status, `${response.status} ${path}`);
-  return (await response.json()) as T;
-}
+const get = <T extends z.ZodType>(path: string, schema: T, params?: Params) => request(path, schema, {}, params);
 
 /** Cookie session check. Throws ApiError(401) when signed out. */
 export async function me(): Promise<MeResponse> {
   if (isMock) return mock.me;
-  return getJSON<MeResponse>("/me");
+  return get("/me", S.User);
 }
 
 export async function login(email: string, password: string): Promise<MeResponse> {
   if (isMock) return mock.me;
-  const result = await postJSON<{ user: MeResponse }>("/auth/login", { email, password });
+  const result = await request("/auth/login", S.TokenResponse, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
   return result.user;
 }
 
@@ -58,35 +67,33 @@ export async function logout(): Promise<void> {
 
 export async function fetchMetrics(): Promise<MetricInfo[]> {
   if (isMock) return mock.metrics();
-  return getJSON<MetricInfo[]>("/metrics");
+  return get("/metrics", z.array(S.MetricInfo));
 }
 
-export async function fetchDaily(from: string, to: string, metrics: string[]): Promise<DailyPoint[]> {
+/** Daily values for the days `from` (inclusive) to `to` (exclusive). */
+export async function fetchDaily(from: Day, to: Day, metrics: string[]): Promise<DailyPoint[]> {
   if (isMock) return mock.daily(from, to, metrics);
-  return getJSON<DailyPoint[]>("/metrics/daily", { from, to, metrics: metrics.join(",") });
+  return get("/metrics/daily", z.array(S.DailyPoint), { from, to, metrics: metrics.join(",") });
 }
 
-export async function fetchSleep(from: string, to: string): Promise<SleepSession[]> {
+/** Sleep sessions starting on the days `from` (inclusive) to `to` (exclusive). */
+export async function fetchSleep(from: Day, to: Day): Promise<SleepSession[]> {
   if (isMock) return mock.sleep(from, to);
-  return getJSON<SleepSession[]>("/sleep", { from, to });
-}
-
-export interface ActivityPage {
-  items: Activity[];
-  nextCursor: string | null;
+  return get("/sleep", z.array(S.SleepSession), { from, to });
 }
 
 export async function fetchActivities(limit: number, cursor?: string): Promise<ActivityPage> {
   if (isMock) return mock.activities(limit, cursor);
-  return getJSON<ActivityPage>("/activities", { limit, cursor });
+  return get("/activities", S.ActivityPage, { limit, cursor });
 }
 
-export async function fetchActivity(id: string): Promise<Activity> {
+export async function fetchActivity(id: string): Promise<ActivityDetail> {
   if (isMock) return mock.activity(id);
-  return getJSON<Activity>(`/activities/${encodeURIComponent(id)}`);
+  return get(`/activities/${encodeURIComponent(id)}`, S.ActivityDetail);
 }
 
-export async function fetchInsights(from: string, to: string, lang: "en" | "de"): Promise<Insight[]> {
+/** Findings for the days `from` (inclusive) to `to` (exclusive). */
+export async function fetchInsights(from: Day, to: Day, lang: "en" | "de"): Promise<Insight[]> {
   if (isMock) return mock.insights(from, to, lang);
-  return getJSON<Insight[]>("/insights", { from, to, lang });
+  return get("/insights", z.array(S.Insight), { from, to, lang });
 }

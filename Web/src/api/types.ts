@@ -1,117 +1,20 @@
-// Wire types for the OpenGarmin backend (docs/backend-api.md). Activities and sleep sessions mirror
-// GarminModels' Codable encoding: optional values are omitted when nil, dates are ISO 8601.
+// Wire types for the OpenGarmin backend (docs/backend-api.md), derived from the runtime schemas in schema.ts.
+import type { z } from "zod";
+import type * as S from "./schema";
 
-export type Aggregation = "sum" | "avg";
-
-/** One (metric, source) pair the server holds data for. */
-export interface MetricInfo {
-  metric: string;
-  source: string;
-  unit: string;
-  aggregation: Aggregation;
-  first: string;
-  last: string;
-  count: number;
-}
-
-/** One local day of one (metric, source) pair. */
-export interface DailyPoint {
-  day: string;
-  metric: string;
-  source: string;
-  value: number;
-  min?: number;
-  max?: number;
-}
-
-export interface Lap {
-  start: string;
-  end: string;
-  distance?: number | null;
-  calories?: number | null;
-  averageHeartRate?: number | null;
-}
-
-export interface ActivityRecord {
-  date: string;
-  latitude?: number | null;
-  longitude?: number | null;
-  altitude?: number | null;
-  heartRate?: number | null;
-  speed?: number | null;
-  distance?: number | null;
-  cadence?: number | null;
-  power?: number | null;
-  temperature?: number | null;
-}
-
-export interface Activity {
-  id: string;
-  sport: number;
-  subSport?: number | null;
-  name?: string | null;
-  start: string;
-  end: string;
-  duration: number;
-  distance?: number | null;
-  activeCalories?: number | null;
-  averageHeartRate?: number | null;
-  maxHeartRate?: number | null;
-  totalAscent?: number | null;
-  totalDescent?: number | null;
-  averageSpeed?: number | null;
-  averageCadence?: number | null;
-  averagePower?: number | null;
-  trainingEffect?: number | null;
-  laps?: Lap[];
-  records?: ActivityRecord[];
-}
-
-export type SleepStage = "awake" | "light" | "deep" | "rem" | "unmeasurable";
-
-export interface SleepInterval {
-  start: string;
-  end: string;
-  stage: SleepStage;
-}
-
-export interface SleepSession {
-  start: string;
-  end: string;
-  intervals: SleepInterval[];
-  score?: number | null;
-}
-
-export interface MeResponse {
-  id: string;
-  email: string;
-  createdAt: string;
-}
-
-export type InsightKind = "trend" | "correlation" | "changepoint" | "anomaly" | "pattern" | "record";
-
-export interface InsightSeries {
-  name: string;
-  /** [x, y]. x is a "YYYY-MM-DD" day, an ISO 8601 instant, or a plain number. */
-  points: [number | string, number][];
-}
-
-/** A curated finding from GET /api/v1/insights. Summaries are already written in the requested language. */
-export interface Insight {
-  id: string;
-  kind: InsightKind;
-  title: string;
-  summary: string;
-  detail?: string;
-  /** Metric keys as /api/v1/metrics names them. */
-  metrics: string[];
-  /** 0…1 */
-  strength: number;
-  /** 0…1 */
-  confidence: number;
-  n: number;
-  period: { from: string; to: string };
-  /** Correlations only: how many days `metrics[1]` follows `metrics[0]` (0–3). */
-  lagDays?: number;
-  chart?: { type: "line" | "scatter" | "bar"; series: InsightSeries[] };
-}
+export type User = z.infer<typeof S.User>;
+export type MeResponse = User;
+export type MetricInfo = z.infer<typeof S.MetricInfo>;
+export type Aggregation = MetricInfo["aggregation"];
+export type DailyPoint = z.infer<typeof S.DailyPoint>;
+export type ActivitySummary = z.infer<typeof S.ActivitySummary>;
+export type ActivityPage = z.infer<typeof S.ActivityPage>;
+export type Lap = z.infer<typeof S.Lap>;
+export type ActivityRecord = z.infer<typeof S.ActivityRecord>;
+export type ActivityDetail = z.infer<typeof S.ActivityDetail>;
+export type SleepStage = z.infer<typeof S.SleepStage>;
+export type SleepSession = z.infer<typeof S.SleepSession>;
+export type SleepInterval = SleepSession["stages"][number];
+export type Insight = z.infer<typeof S.Insight>;
+export type InsightKind = Insight["kind"];
+export type InsightSeries = NonNullable<Insight["chart"]>["series"][number];

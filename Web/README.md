@@ -43,13 +43,17 @@ The server's insights (`/api/v1/insights`) are the curated layer. The overview s
 | `GET /api/v1/activities?limit&cursor`, `GET /api/v1/activities/{id}` | list with cursor paging; detail with laps and records |
 | `GET /api/v1/insights?from&to&lang` | curated findings, already sorted by interest |
 
-## Assumptions to confirm with the server
+## Contract with the server
 
-1. `/metrics` names HealthKit types by their identifier (`HKQuantityTypeIdentifier...`), and the dashboard matches both those and the Garmin names.
-2. The `metrics` of an insight use the same keys as `/metrics`.
-3. An insight's `period` uses `YYYY-MM-DD` days, inclusive at both ends. The explorer and correlation links depend on this.
-4. An insight chart's `x` is a day string, an ISO 8601 instant, or a number. Points are rendered as they are.
-5. Correlation insights carry an optional `lagDays` (0–3). The link opens the correlation view at that lag, or at lag 0 without it.
+Every response is parsed with the zod schemas in `src/api/schema.ts`, which mirror the server's Swift types; the
+TypeScript types in `src/api/types.ts` are derived from them. A response that breaks the contract fails with the path
+of the bad field instead of rendering wrong data. `src/api/schema.test.ts` checks server-shaped bodies and every mock
+response against the schemas, so mock mode cannot drift from the server. Days are the branded `Day` type: only
+`parseDay`, the schemas and day arithmetic produce one, and ranges are sent as `YYYY-MM-DD` with `to` exclusive.
+
+- HealthKit types are named by their identifier (`HKQuantityTypeIdentifier...`); the dashboard matches both those and the Garmin names.
+- An insight's `period` uses `YYYY-MM-DD` days, inclusive at both ends. Line chart x values are epoch milliseconds; bar and scatter x values are used as they are.
+- Correlation insights carry an optional `lagDays` (0–3). The link opens the correlation view at that lag, or at lag 0 without it.
 
 ## Decisions for the owner
 

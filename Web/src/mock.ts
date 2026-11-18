@@ -4,8 +4,10 @@
 // samples are mirrored into HealthKit from the watch's arrival on, which the server marks as garmin-mirror.
 
 import type {
-  Activity,
+  ActivityDetail,
+  ActivityPage,
   ActivityRecord,
+  ActivitySummary,
   Aggregation,
   DailyPoint,
   Lap,
@@ -15,16 +17,23 @@ import type {
   SleepSession,
   SleepStage,
 } from "./api/types";
-import type { ActivityPage } from "./api/client";
 import type { Insight } from "./api/types";
 import { records, relate, trend, type Series } from "./lib/analytics";
-import { addDays, dayOfYear, daysInclusive, todayDay, weekdayIndex, type Day } from "./lib/time";
+import { addDays, dayMs, dayOfYear, daysInclusive, todayDay, weekdayIndex, type Day } from "./lib/time";
 
-export const me: MeResponse = { id: "demo", email: "demo@opengarmin.local", createdAt: "2019-03-01T08:00:00Z" };
+export const me: MeResponse = {
+  id: "demo",
+  email: "demo@opengarmin.local",
+  createdAt: "2019-03-01T08:00:00Z",
+  timeZone: "Europe/Berlin",
+  workDays: [1, 2, 3, 4, 5],
+  workStart: 9,
+  workEnd: 17,
+};
 
-const START: Day = "2019-03-01";
-const WATCH_FROM: Day = "2021-07-01";
-const GAP: [Day, Day] = ["2022-02-10", "2022-03-05"];
+const START = "2019-03-01" as Day;
+const WATCH_FROM = "2021-07-01" as Day;
+const GAP = ["2022-02-10", "2022-03-05"] as [Day, Day];
 const APPLE = "healthkit:com.apple.health";
 const MIRROR = "healthkit:garmin-mirror";
 const HK_STEPS = "HKQuantityTypeIdentifierStepCount";
@@ -86,11 +95,11 @@ interface Row {
 }
 
 interface Summary {
-  activity: Activity;
+  activity: ActivitySummary;
   seed: number;
   speed: number;
   hr: number;
-  cadence: number | null;
+  cadence: number | undefined;
 }
 
 interface Dataset {
@@ -162,7 +171,7 @@ function dataset(): Dataset {
       row.sleep = {
         start: start.toISOString(),
         end: new Date(start.getTime() + sleepMin * 60_000).toISOString(),
-        intervals: stages(start, sleepMin, rand),
+        stages: stages(start, sleepMin, rand),
         score: clamp(Math.round(60 + (sleepMin - 380) / 6 + 5 * gauss()), 40, 98),
       };
     }
@@ -180,6 +189,7 @@ function dataset(): Dataset {
       summaries.push({
         activity: {
           id: `act-${String(index).padStart(4, "0")}`,
+          externalId: `mock-${index}`,
           sport: spec.sport,
           start: start.toISOString(),
           end: end.toISOString(),
@@ -195,7 +205,7 @@ function dataset(): Dataset {
         seed: index * 977 + 13,
         speed,
         hr,
-        cadence: spec.sport === 1 ? Math.round(between(165, 176)) : spec.sport === 2 ? Math.round(between(85, 95)) : null,
+        cadence: spec.sport === 1 ? Math.round(between(165, 176)) : spec.sport === 2 ? Math.round(between(85, 95)) : undefined,
       });
     }
   });
@@ -334,9 +344,9 @@ export function daily(from: Day, to: Day, wanted: string[]): DailyPoint[] {
   return dataset().points.filter((p) => keys.has(p.metric) && p.day >= from && p.day < to);
 }
 
-export function sleep(from: string, to: string): SleepSession[] {
-  const lo = Date.parse(from);
-  const hi = Date.parse(to);
+export function sleep(from: Day, to: Day): SleepSession[] {
+  const lo = dayMs(from);
+  const hi = dayMs(to);
   return dataset()
     .rows.flatMap((r) => (r.sleep ? [r.sleep] : []))
     .filter((s) => Date.parse(s.start) >= lo && Date.parse(s.start) < hi);
@@ -347,14 +357,14 @@ export function activities(limit: number, cursor?: string): ActivityPage {
   const offset = Number(cursor ?? 0);
   const items = sorted.slice(offset, offset + limit);
   const next = offset + limit;
-  return { items, nextCursor: next < sorted.length ? String(next) : null };
+  return { items, nextCursor: next < sorted.length ? String(next) : undefined };
 }
 
-export function activity(id: string): Activity {
+export function activity(id: string): ActivityDetail {
   const summary = dataset().summaries.find((s) => s.activity.id === id);
   if (!summary) throw new Error(`404 activity ${id}`);
   const { records, laps } = expand(summary);
-  return { ...summary.activity, laps, records };
+  return { activity: summary.activity, laps, records };
 }
 
 // MARK: - Insights
@@ -420,8 +430,8 @@ export function insights(from: Day, to: Day, lang: "en" | "de"): Insight[] {
       chart: {
         type: "line",
         series: [
-          { name: de ? "Monatsmittel" : "Monthly mean", points: tr.months.map((m): [string, number] => [m.day, m.value]) },
-          { name: de ? "Trend" : "Trend", points: tr.months.map((m, i): [string, number] => [m.day, tr.fitted[i] ?? m.value]) },
+          { name: de ? "Monatsmittel" : "Monthly mean", points: tr.months.map((m): [number, number] => [dayMs(m.day), m.value]) },
+          { name: de ? "Trend" : "Trend", points: tr.months.map((m, i): [number, number] => [dayMs(m.day), tr.fitted[i] ?? m.value]) },
         ],
       },
     });

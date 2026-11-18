@@ -8,7 +8,7 @@ import { useEarliestDay, useSleep } from "../data";
 import { t, type Key } from "../i18n";
 import { bedtimeMinutes, fmt, fmtDay, fmtHM, fmtMinuteOfDay, fmtSigned } from "../lib/format";
 import { mean, median, stdev, theilSen } from "../lib/stats";
-import { dayOf, presetStart, todayDay, type Preset } from "../lib/time";
+import { dayOf, presetStart, todayDay, type Day, type Preset } from "../lib/time";
 import { PRESETS } from "./shared";
 
 const STAGES: SleepStage[] = ["deep", "light", "rem", "awake"];
@@ -24,7 +24,7 @@ type Minutes = Record<SleepStage, number>;
 
 function minutesByStage(session: SleepSession): Minutes {
   const out: Minutes = { awake: 0, light: 0, deep: 0, rem: 0, unmeasurable: 0 };
-  for (const iv of session.intervals) out[iv.stage] += (Date.parse(iv.end) - Date.parse(iv.start)) / 60_000;
+  for (const iv of session.stages) out[iv.stage] += (Date.parse(iv.end) - Date.parse(iv.start)) / 60_000;
   return out;
 }
 
@@ -81,7 +81,7 @@ export function Sleep() {
       xAxis: {
         type: "category",
         data: nights.map((n) => dayOf(new Date(n.end))),
-        axisLabel: { color: axis.color, formatter: (v: string) => fmtDay(v, { day: "numeric", month: "short" }) },
+        axisLabel: { color: axis.color, formatter: (v: string) => fmtDay(v as Day, { day: "numeric", month: "short" }) },
         axisLine: { lineStyle: { color: p.rule } },
       },
       yAxis: {

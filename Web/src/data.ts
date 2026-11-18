@@ -1,24 +1,27 @@
 import { useMemo, useState, useSyncExternalStore, useEffect } from "react";
+import { z } from "zod";
 import { fetchDaily, fetchInsights, fetchMetrics, fetchSleep } from "./api/client";
 import type { Insight, MetricInfo, SleepSession } from "./api/types";
 import { lang } from "./i18n";
 import type { Series } from "./lib/analytics";
 import { CONCEPTS, CONCEPT_IDS, conceptOf, type ConceptId } from "./lib/concepts";
 import { resolveSeries, sourcesOf, type SourcedValue } from "./lib/sources";
-import { addDays, dayMs, type Day } from "./lib/time";
+import { addDays, type Day } from "./lib/time";
 
 // MARK: - Source preferences, kept on this device
 
-export interface SourcePrefs {
-  preferred: Partial<Record<ConceptId, string>>;
-  includeMirror: boolean;
-}
+const SourcePrefsSchema = z.object({
+  preferred: z.partialRecord(z.enum(CONCEPT_IDS as [ConceptId, ...ConceptId[]]), z.string()).catch({}),
+  includeMirror: z.boolean().catch(false),
+});
+
+export type SourcePrefs = z.infer<typeof SourcePrefsSchema>;
 
 const PREFS_KEY = "opengarmin.sources";
 const readPrefs = (): SourcePrefs => {
   try {
-    const raw = localStorage.getItem(PREFS_KEY);
-    if (raw) return { preferred: {}, includeMirror: false, ...(JSON.parse(raw) as Partial<SourcePrefs>) };
+    const parsed = SourcePrefsSchema.safeParse(JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}"));
+    if (parsed.success) return parsed.data;
   } catch {
     // Unreadable storage falls back to the defaults.
   }
@@ -163,8 +166,7 @@ export function useSeries(ids: readonly ConceptId[], from: Day, to: Day): Resolv
 
 /** Sleep sessions whose night starts in the inclusive day range [from, to]. */
 export function useSleep(from: Day, to: Day): Loaded<SleepSession[]> {
-  const iso = (day: Day) => new Date(dayMs(day)).toISOString();
-  return useAsync(() => fetchSleep(iso(from), iso(addDays(to, 1))), `sleep|${from}|${to}`);
+  return useAsync(() => fetchSleep(from, addDays(to, 1)), `sleep|${from}|${to}`);
 }
 
 /** Curated findings for the inclusive day range [from, to], in the browser's language. */

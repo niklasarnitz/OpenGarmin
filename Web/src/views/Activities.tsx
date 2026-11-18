@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { EChartsCoreOption } from "echarts/core";
 import { fetchActivities, fetchActivity } from "../api/client";
-import type { Activity, ActivityRecord } from "../api/types";
+import type { ActivityRecord, ActivitySummary } from "../api/types";
 import { Chart } from "../components/Chart";
 import { palette, useDark } from "../components/theme";
 import { RouteMap } from "../components/RouteMap";
@@ -48,7 +48,7 @@ function zoneSeconds(records: ActivityRecord[]): number[] {
 }
 
 export function Activities() {
-  const [items, setItems] = useState<Activity[]>([]);
+  const [items, setItems] = useState<ActivitySummary[]>([]);
   const [next, setNext] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -60,7 +60,7 @@ export function Activities() {
     fetchActivities(20, cursor).then(
       (page) => {
         setItems((prev) => (cursor ? [...prev, ...page.items] : page.items));
-        setNext(page.nextCursor);
+        setNext(page.nextCursor ?? null);
         setLoaded(true);
         setBusy(false);
       },
@@ -129,9 +129,9 @@ export function Activities() {
 export function ActivityDetail({ id }: { id: string }) {
   const activity = useAsync(() => fetchActivity(id), `activity|${id}`);
   const p = palette(useDark());
-  const data = activity.data;
-  const records = useMemo(() => data?.records ?? [], [data]);
-  const laps = useMemo(() => data?.laps ?? [], [data]);
+  const data = activity.data?.activity;
+  const records = useMemo(() => activity.data?.records ?? [], [activity.data]);
+  const laps = useMemo(() => activity.data?.laps ?? [], [activity.data]);
 
   const track = useMemo(
     () =>

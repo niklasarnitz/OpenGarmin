@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { aggregate, baseline, changepoint, correlationMatrix, latest, recentVsBaseline, relate, rolling, trend, type Series } from "./analytics";
 import { kendall, linearFit, mean, median, pearson, theilSen } from "./stats";
-import { addDays, daysBetween, daysInclusive } from "./time";
+import { addDays, daysBetween, daysInclusive, parseDay, type Day } from "./time";
 
-const series = (start: string, values: number[]): Series => new Map(values.map((v, i) => [addDays(start, i), v]));
+/** A day literal, checked. */
+const day = (text: string): Day => parseDay(text) ?? (() => { throw new Error(text); })();
+
+const series = (start: Day, values: number[]): Series => new Map(values.map((v, i) => [addDays(start, i), v]));
 
 /** Park–Miller generator, centred on zero: deterministic noise for the tests. */
 function noise(seed: number): () => number {
@@ -16,59 +19,59 @@ function noise(seed: number): () => number {
 
 describe("aggregate", () => {
   it("averages and totals by month", () => {
-    const s = series("2024-01-30", [1, 2, 3, 4]); // Jan 30, Jan 31, Feb 1, Feb 2
+    const s = series(day("2024-01-30"), [1, 2, 3, 4]); // Jan 30, Jan 31, Feb 1, Feb 2
     expect(aggregate(s, "month", "avg")).toMatchObject([
-      { start: "2024-01-01", value: 1.5, n: 2 },
-      { start: "2024-02-01", value: 3.5, n: 2 },
+      { start: day("2024-01-01"), value: 1.5, n: 2 },
+      { start: day("2024-02-01"), value: 3.5, n: 2 },
     ]);
     expect(aggregate(s, "month", "sum").map((b) => b.value)).toEqual([3, 7]);
   });
 
   it("starts weeks on Monday", () => {
     // 2024-01-07 is a Sunday, so it closes the week that began on Monday 2024-01-01.
-    const s = series("2024-01-07", [5, 7]);
+    const s = series(day("2024-01-07"), [5, 7]);
     expect(aggregate(s, "week", "avg").map((b) => [b.start, b.value])).toEqual([
-      ["2024-01-01", 5],
-      ["2024-01-08", 7],
+      [day("2024-01-01"), 5],
+      [day("2024-01-08"), 7],
     ]);
   });
 });
 
 describe("rolling", () => {
   it("averages the trailing window", () => {
-    const r = rolling(series("2024-03-01", [1, 2, 6, 8]), 2);
-    expect(r.get("2024-03-01")).toBe(1);
-    expect(r.get("2024-03-02")).toBe(1.5);
-    expect(r.get("2024-03-03")).toBe(4);
-    expect(r.get("2024-03-04")).toBe(7);
+    const r = rolling(series(day("2024-03-01"), [1, 2, 6, 8]), 2);
+    expect(r.get(day("2024-03-01"))).toBe(1);
+    expect(r.get(day("2024-03-02"))).toBe(1.5);
+    expect(r.get(day("2024-03-03"))).toBe(4);
+    expect(r.get(day("2024-03-04"))).toBe(7);
   });
 
   it("skips missing days instead of counting them as zero", () => {
     const s: Series = new Map([
-      ["2024-03-01", 4],
-      ["2024-03-03", 8],
+      [day("2024-03-01"), 4],
+      [day("2024-03-03"), 8],
     ]);
-    expect(rolling(s, 3).get("2024-03-03")).toBe(6);
+    expect(rolling(s, 3).get(day("2024-03-03"))).toBe(6);
   });
 });
 
 describe("baseline and latest", () => {
   it("compares a day with the days before it, never with itself", () => {
-    const s = series("2024-01-01", [10, 10, 10, 10, 10, 10, 10, 100]);
-    expect(baseline(s, "2024-01-08", 56)).toMatchObject({ mean: 10, sd: 0, n: 7 });
+    const s = series(day("2024-01-01"), [10, 10, 10, 10, 10, 10, 10, 100]);
+    expect(baseline(s, day("2024-01-08"), 56)).toMatchObject({ mean: 10, sd: 0, n: 7 });
   });
 
   it("needs a week of history", () => {
-    expect(baseline(series("2024-01-01", [1, 2, 3]), "2024-01-04")).toBeNull();
+    expect(baseline(series(day("2024-01-01"), [1, 2, 3]), day("2024-01-04"))).toBeNull();
   });
 
   it("returns the last day with a value", () => {
-    expect(latest(series("2024-01-01", [1, 9]))).toEqual({ day: "2024-01-02", value: 9 });
+    expect(latest(series(day("2024-01-01"), [1, 9]))).toEqual({ day: day("2024-01-02"), value: 9 });
   });
 });
 
 describe("lagged correlation", () => {
-  const a = series("2024-01-01", Array.from({ length: 120 }, noise(7)));
+  const a = series(day("2024-01-01"), Array.from({ length: 120 }, noise(7)));
   // b on day D equals a on day D - 2, so b reaches a's values two days later.
   const b: Series = new Map([...a].map(([day, v]) => [addDays(day, 2), v]));
 
@@ -92,9 +95,9 @@ describe("lagged correlation", () => {
 
 describe("trend", () => {
   const seasonal = [0, 3, 5, 2, -1, -4, -6, -3, 1, 4, 2, -2];
-  const days = daysInclusive("2019-01-01", "2023-12-31");
+  const days = daysInclusive(day("2019-01-01"), day("2023-12-31"));
   const monthOf = (d: string) => Number(d.slice(5, 7)) - 1;
-  const years = (d: string) => daysBetween("2019-01-01", d) / 365.25;
+  const years = (d: Day) => daysBetween(day("2019-01-01"), d) / 365.25;
 
   it("recovers a 2-per-year slope through a seasonal swing", () => {
     const s: Series = new Map(days.map((d) => [d, 2 * years(d) + (seasonal[monthOf(d)] ?? 0)]));
@@ -108,11 +111,11 @@ describe("trend", () => {
     const next = noise(11);
     const s: Series = new Map(
       days.map((d) => {
-        const step = d >= "2021-07-01" ? 10 : 0;
+        const step = d >= day("2021-07-01") ? 10 : 0;
         return [d, 2 * years(d) + (seasonal[monthOf(d)] ?? 0) + step + next() * 0.8];
       }),
     );
-    expect(trend(s)?.changepoint?.day).toBe("2021-07-01");
+    expect(trend(s)?.changepoint?.day).toBe(day("2021-07-01"));
   });
 
   it("reports no level shift on a steady trend with noise", () => {
@@ -122,7 +125,7 @@ describe("trend", () => {
   });
 
   it("needs two years of months", () => {
-    expect(trend(series("2024-01-01", [1, 2, 3]))).toBeNull();
+    expect(trend(series(day("2024-01-01"), [1, 2, 3]))).toBeNull();
   });
 });
 
@@ -163,11 +166,11 @@ describe("stats", () => {
 describe("recentVsBaseline", () => {
   it("compares the last week with the weeks before it, not with itself", () => {
     // 56 days at 10, then 7 days at 13: the recent week is 13 against a usual of 10.
-    const s = series("2024-01-01", [...Array(56).fill(10), ...Array(7).fill(13)]);
-    expect(recentVsBaseline(s, "2024-03-03", 7, 56)).toEqual({ recent: 13, usual: 10, n: 7 });
+    const s = series(day("2024-01-01"), [...Array(56).fill(10), ...Array(7).fill(13)]);
+    expect(recentVsBaseline(s, day("2024-03-03"), 7, 56)).toEqual({ recent: 13, usual: 10, n: 7 });
   });
 
   it("refuses to compare with too few days", () => {
-    expect(recentVsBaseline(series("2024-01-01", [1, 2, 3, 4, 5]), "2024-01-05")).toBeNull();
+    expect(recentVsBaseline(series(day("2024-01-01"), [1, 2, 3, 4, 5]), day("2024-01-05"))).toBeNull();
   });
 });

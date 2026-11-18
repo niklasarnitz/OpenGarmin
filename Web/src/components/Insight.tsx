@@ -6,23 +6,18 @@ import { palette, useDark } from "./theme";
 import { t, type Key } from "../i18n";
 import { fmt } from "../lib/format";
 import { insightHrefs } from "../lib/insights";
-import { dayMs } from "../lib/time";
 import { conceptName } from "../views/shared";
 import { conceptOf } from "../lib/concepts";
-import type { Day } from "../lib/time";
 
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
-
-/** Small chart that goes with a finding. Time values are days or ISO instants; numbers pass through. */
+/** Small chart that goes with a finding. Line charts run over time (x in epoch milliseconds); bars and scatters use x as is. */
 export function InsightChart({ insight, height }: { insight: Insight; height: number }) {
   const p = palette(useDark());
   const chart = insight.chart;
   const option = useMemo((): EChartsCoreOption | null => {
     if (!chart) return null;
-    const toX = (x: number | string): number => (typeof x === "number" ? x : DAY.test(x) ? dayMs(x as Day) : Date.parse(x));
     const kind = chart.type;
     const colors = [p.garmin, p.signal, p.apple];
-    const timeAxis = kind !== "scatter" && chart.series.some((s) => s.points.some(([x]) => typeof x === "string"));
+    const timeAxis = kind === "line";
     const axis = {
       axisLabel: { color: p.muted },
       axisLine: { lineStyle: { color: p.rule } },
@@ -37,7 +32,7 @@ export function InsightChart({ insight, height }: { insight: Insight; height: nu
       series: chart.series.map((s, i) => ({
         name: s.name,
         type: kind,
-        data: s.points.map(([x, y]) => [toX(x), y]),
+        data: s.points,
         showSymbol: kind === "scatter",
         symbolSize: 4,
         barMaxWidth: 14,

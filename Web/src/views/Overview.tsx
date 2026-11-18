@@ -115,12 +115,12 @@ function YearStrip({ steps }: { steps: Series }) {
         <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={t("ovYears", { from: years[0]?.year ?? "" })}>
           {years.map(({ year, median }, row) => {
             const top = row * rowHeight;
-            const jan1 = `${year}-01-01`;
+            const jan1 = `${year}-01-01` as Day;
             const offset = weekdayIndex(jan1);
             return (
               <g key={year} transform={`translate(0 ${top})`}>
                 <text x="0" y={cell} className="year-label">{year}</text>
-                {daysInclusive(jan1, `${year}-12-31`).map((day) => {
+                {daysInclusive(jan1, `${year}-12-31` as Day).map((day) => {
                   const v = steps.get(day);
                   if (v === undefined) return null;
                   const col = Math.floor((daysBetween(jan1, day) + offset) / 7);

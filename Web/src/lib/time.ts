@@ -1,12 +1,23 @@
 // Calendar days are "YYYY-MM-DD" strings in the user's local calendar, as the server returns them.
 // Arithmetic goes through UTC so DST changes never shift a day.
 
-export type Day = string;
+/** A "YYYY-MM-DD" string. Branded so only checked days (from `parseDay`, the API schemas or day arithmetic) reach the API. */
+export type Day = string & { readonly __brand: "Day" };
+
+export const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The day in `text`, or null when it is not a valid "YYYY-MM-DD" date. */
+export function parseDay(text: string | null | undefined): Day | null {
+  if (!text || !DAY_PATTERN.test(text)) return null;
+  const [y, m, d] = text.split("-").map(Number) as [number, number, number];
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d ? (text as Day) : null;
+}
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
 export function dayOf(date: Date): Day {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` as Day;
 }
 
 export function todayDay(): Day {
@@ -26,7 +37,7 @@ export function dayMs(day: Day): number {
 
 export function addDays(day: Day, n: number): Day {
   const [y, m, d] = parts(day);
-  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10) as Day;
 }
 
 /** Whole days from `a` to `b` (negative when b is earlier). */
@@ -58,7 +69,7 @@ export function yearOf(day: Day): number {
 }
 
 export function dayOfYear(day: Day): number {
-  return daysBetween(`${yearOf(day)}-01-01`, day);
+  return daysBetween(`${yearOf(day)}-01-01` as Day, day);
 }
 
 export type Preset = "week" | "month" | "year" | "five" | "all";

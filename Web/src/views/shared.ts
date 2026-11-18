@@ -1,15 +1,13 @@
 import { t, type Key } from "../i18n";
 import { CONCEPTS, type ConceptId } from "../lib/concepts";
 import { fmt } from "../lib/format";
-import type { Day, Preset } from "../lib/time";
-
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
+import { parseDay, type Day, type Preset } from "../lib/time";
 
 /** A custom period from the URL (?from=&to=), as the findings link to. Null when absent or malformed. */
 export function rangeFromQuery(query: URLSearchParams): { from: Day; to: Day } | null {
-  const from = query.get("from");
-  const to = query.get("to");
-  return from && to && DAY.test(from) && DAY.test(to) && from <= to ? { from, to } : null;
+  const from = parseDay(query.get("from"));
+  const to = parseDay(query.get("to"));
+  return from && to && from <= to ? { from, to } : null;
 }
 
 export const PRESETS: { value: Preset; label: string }[] = [
