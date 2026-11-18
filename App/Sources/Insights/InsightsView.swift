@@ -53,18 +53,26 @@ struct InsightsView: View {
             .background(Color.canvas.ignoresSafeArea())
             .navigationTitle("Insights")
             .refreshable { await app.watch.syncNow() }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Picker("Range", selection: $preset) {
+                            ForEach(ChartRangePreset.allCases) { Text($0.title).tag($0) }
+                        }
+                    } label: {
+                        Label { Text(preset.title) } icon: { Image(systemName: "calendar") }
+                            .labelStyle(.titleAndIcon)
+                    }
+                }
+            }
         }
     }
 
     // MARK: - Range
 
     private var rangePicker: some View {
+        // The preset itself is chosen in the navigation bar; this shows the custom dates and the resulting days.
         VStack(alignment: .leading, spacing: 8) {
-            Picker("Range", selection: $preset) {
-                ForEach(ChartRangePreset.allCases) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.menu)
-            .frame(maxWidth: .infinity, alignment: .leading)
             if preset == .custom {
                 DatePicker("From", selection: $customFrom, in: ...Date.now, displayedComponents: .date)
                 DatePicker("To", selection: $customTo, in: ...Date.now, displayedComponents: .date)
@@ -73,6 +81,7 @@ struct InsightsView: View {
                  + interval.end.addingTimeInterval(-1).formatted(date: .abbreviated, time: .omitted))
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
             if reachesPastPhoneHistory {
                 Text("The phone keeps the last three months. Older data comes from your backend.")
                     .font(.caption)
@@ -87,11 +96,11 @@ struct InsightsView: View {
         VStack(spacing: 16) {
             MetricTile("Stress", symbol: "bolt.heart.fill", tint: Palette.amber) {
                 MetricFigure(value: data.stress.latest.map { Formatting.whole($0) } ?? "–", unit: "/ 100")
-                SeriesChart(points: data.stress.filter { interval.contains($0.date) }, tint: Palette.amber, label: "Stress", height: 130, zeroMeansNoData: true)
+                SeriesChart(points: data.stress.filter { interval.contains($0.date) }, tint: Palette.amber, label: "Stress", height: 130, zeroMeansNoData: true, domain: interval)
             }
             MetricTile("Body battery", symbol: "battery.75percent", tint: Palette.lichen) {
                 MetricFigure(value: data.bodyBattery.latest.map { Formatting.whole($0) } ?? "–", unit: "/ 100")
-                SeriesChart(points: data.bodyBattery.filter { interval.contains($0.date) }, tint: Palette.lichen, label: "Body battery", height: 130, zeroMeansNoData: true)
+                SeriesChart(points: data.bodyBattery.filter { interval.contains($0.date) }, tint: Palette.lichen, label: "Body battery", height: 130, zeroMeansNoData: true, domain: interval)
             }
         }
     }

@@ -75,3 +75,14 @@ private func day(_ y: Int, _ m: Int, _ d: Int, _ h: Int = 0) -> Date {
     #expect(segments.map { $0.map(\.value) } == [[20]])
     #expect(gaps == [DateInterval(start: t(0), end: t(3))])
 }
+
+@Test func readingsFurtherApartThanTheSpacingAreAGap() {
+    let t = { (minutes: Double) in Date(timeIntervalSinceReferenceDate: minutes * 60) }
+    // Every 3 minutes, then nothing for 10 hours (power saving), then readings again; 30 minutes is the limit.
+    let points = [0, 3, 6, 606, 609].map { PointSample(date: t(Double($0)), value: 25) }
+    let (segments, gaps) = ChartGaps.split(points, maxSpacing: 1800)
+    #expect(segments.map(\.count) == [3, 2])
+    #expect(gaps == [DateInterval(start: t(6), end: t(606))])
+    // Exactly at the limit is still one line.
+    #expect(ChartGaps.split([PointSample(date: t(0), value: 1), PointSample(date: t(30), value: 1)], maxSpacing: 1800).gaps.isEmpty)
+}

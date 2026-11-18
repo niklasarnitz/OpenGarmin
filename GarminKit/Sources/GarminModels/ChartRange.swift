@@ -80,8 +80,10 @@ public enum ChartSmoothing {
 public enum ChartGaps {
     /// The runs of readings between gaps, and the gaps themselves. A gap is a run of readings `isMissing` marks, and
     /// spans from the last reading before it to the first one after it (or to its own end at the edge of the series),
-    /// so the greyed range meets the line on both sides.
-    public static func split(_ points: [PointSample], isMissing: (PointSample) -> Bool = { $0.value <= 0 })
+    /// so the greyed range meets the line on both sides. Two readings further apart than `maxSpacing` are a gap too:
+    /// the watch recorded nothing in between, for example in power-saving mode.
+    public static func split(_ points: [PointSample], maxSpacing: TimeInterval = .infinity,
+                             isMissing: (PointSample) -> Bool = { $0.value <= 0 })
         -> (segments: [[PointSample]], gaps: [DateInterval]) {
         let sorted = points.sorted { $0.date < $1.date }
         var segments: [[PointSample]] = []
@@ -100,6 +102,10 @@ public enum ChartGaps {
                 if let start = gapStart {
                     gaps.append(DateInterval(start: start, end: point.date))
                     gapStart = nil
+                } else if let previous = current.last, point.date.timeIntervalSince(previous.date) > maxSpacing {
+                    segments.append(current)
+                    current = []
+                    gaps.append(DateInterval(start: previous.date, end: point.date))
                 }
                 current.append(point)
             }

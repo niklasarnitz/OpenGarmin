@@ -14,6 +14,8 @@ struct TodayView: View {
     private var sleep: SleepSession? { data.sleep.max { $0.end < $1.end } }
     private var heartRateNow: Int? { data.heartRate.max { $0.date < $1.date }?.bpm }
 
+    private var today: DateInterval { Calendar.current.dateInterval(of: .day, for: .now)! }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -47,7 +49,7 @@ struct TodayView: View {
             .task(id: app.watch.latest) { health = await HealthStore.today() }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    WatchStatusPill(state: app.watch.state, battery: app.watch.battery)
+                    WatchStatusPill(state: app.watch.state, battery: app.watch.battery, glass: false)
                 }
             }
         }
@@ -89,7 +91,7 @@ struct TodayView: View {
             MetricFigure(value: heartRateNow.map(String.init) ?? "–", unit: "bpm")
             SeriesChart(points: data.heartRate.filter { Calendar.current.isDateInToday($0.date) }
                             .map { PointSample(date: $0.date, value: Double($0.bpm)) },
-                        tint: Palette.ember, label: "Heart rate", height: 150, zeroMeansNoData: true)
+                        tint: Palette.ember, label: "Heart rate", height: 150, zeroMeansNoData: true, domain: today)
         }
         .accessibilityElement(children: .combine)
     }
@@ -139,7 +141,7 @@ struct TodayView: View {
 
     private var stress: some View {
         MetricTile("Stress", symbol: "bolt.heart.fill", tint: Palette.amber) {
-            SeriesChart(points: data.stress.filter { Calendar.current.isDateInToday($0.date) }, tint: Palette.amber, label: "Stress", height: 120, zeroMeansNoData: true)
+            SeriesChart(points: data.stress.filter { Calendar.current.isDateInToday($0.date) }, tint: Palette.amber, label: "Stress", height: 120, zeroMeansNoData: true, domain: today)
         }
         .accessibilityElement(children: .combine)
     }

@@ -86,6 +86,8 @@ struct RingGauge: View {
 struct WatchStatusPill: View {
     let state: WatchConnectionState
     let battery: BatteryStatus?
+    /// Off in a toolbar, which already gives its items a glass capsule; a second one drew a double border.
+    var glass = true
 
     var body: some View {
         HStack(spacing: 7) {
@@ -99,9 +101,9 @@ struct WatchStatusPill: View {
             }
         }
         .font(.caption.weight(.semibold))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .glassEffect(.regular, in: .capsule)
+        .padding(.horizontal, glass ? 12 : 4)
+        .padding(.vertical, glass ? 8 : 0)
+        .glassEffect(glass ? .regular : .identity, in: .capsule)
         .accessibilityElement(children: .combine)
     }
 }
@@ -145,6 +147,9 @@ struct SeriesChart: View {
     /// Garmin writes 0 when it could not measure (stress, Body Battery, heart rate). Those stretches are drawn as
     /// greyed "no data" ranges and the line breaks there. Off for series where 0 is a real value, such as speed.
     var zeroMeansNoData = false
+    /// The time the chart covers, such as today or the selected Insights range. With `zeroMeansNoData`, the stretch
+    /// before the first and after the last reading is greyed too (up to now), and the x axis spans the whole range.
+    var domain: DateInterval?
 
     var body: some View {
         if points.isEmpty {
@@ -162,19 +167,34 @@ struct SeriesChart: View {
         return last.timeIntervalSince(first)
     }
 
-    private var spansDays: Bool { span > 36 * 3600 }
+    private var spansDays: Bool { (domain?.duration ?? span) > 36 * 3600 }
 
     /// The line's pieces and the greyed ranges between them. Gaps shorter than ten minutes, or than one smoothing
     /// bucket on multi-day charts, are left out so single dropped readings do not hatch the chart.
     private var layout: (segments: [[PointSample]], gaps: [DateInterval]) {
         guard zeroMeansNoData else { return ([ChartSmoothing.smoothed(points)], []) }
-        let split = ChartGaps.split(points)
-        let shortest = max(600, ChartSmoothing.bucketWidth(forSpan: span) ?? 0)
-        let gaps = split.gaps.filter { $0.duration >= shortest }
+        let bucket = ChartSmoothing.bucketWidth(forSpan: span) ?? 0
+        // Stress and Body Battery come every few minutes; half an hour without any reading (power saving, watch
+        // off) is a gap, as is anything longer than two smoothing buckets on multi-day charts.
+        let split = ChartGaps.split(points, maxSpacing: max(1800, 2 * bucket))
+        let shortest = max(600, bucket)
+        var gaps = split.gaps.filter { $0.duration >= shortest }
+        let readings = split.segments.joined().map(\.date)
+        if let domain {
+            let end = min(domain.end, .now)
+            if let first = readings.min(), first.timeIntervalSince(domain.start) > shortest {
+                gaps.append(DateInterval(start: domain.start, end: first))
+            }
+            if let last = readings.max(), end.timeIntervalSince(last) > max(1800, 2 * bucket) {
+                gaps.append(DateInterval(start: last, end: end))
+            }
+            if readings.isEmpty, end > domain.start { gaps.append(DateInterval(start: domain.start, end: end)) }
+        }
         // Readings on both sides of a dropped short gap rejoin one piece, so smoothing runs across it.
         var segments: [[PointSample]] = []
         for point in split.segments.joined() {
-            if let last = segments.last?.last, gaps.contains(where: { $0.start >= last.date && $0.end <= point.date }) {
+            if let last = segments.last?.last,
+               gaps.contains(where: { $0.start >= last.date && $0.end <= point.date && $0.duration > 0 }) {
                 segments.append([point])
             } else if segments.isEmpty {
                 segments.append([point])
@@ -222,6 +242,7 @@ struct SeriesChart: View {
             }
         }
         .chartYScale(domain: .automatic(includesZero: false))
+        .chartXScale(domain: (domain?.start ?? points.map(\.date).min()!)...(domain?.end ?? points.map(\.date).max()!))
         .chartXAxis {
             AxisMarks(values: .automatic(desiredCount: 4)) { _ in
                 AxisValueLabel(format: spansDays ? .dateTime.day().month(.abbreviated) : .dateTime.hour().minute())
