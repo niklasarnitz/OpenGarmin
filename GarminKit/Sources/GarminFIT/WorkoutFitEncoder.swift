@@ -12,13 +12,33 @@ public enum WorkoutFitEncoder {
     private static let heartRateOffset: Int64 = 100
     /// Custom power targets are offset by +1000 watts.
     private static let powerOffset: Int64 = 1000
+    /// FIT exercise weight is kilograms times 100, and its display unit is kilograms.
+    private static let weightScale = 100.0
+    private static let kilogramUnit: Int64 = 1
 
     public static func encode(_ plan: WorkoutPlan) -> Data {
         var messages = [fileId(), fileCreator(), workout(plan)]
         for (index, step) in plan.steps.enumerated() {
             messages.append(stepMessage(step, index: index, sport: plan.sport))
         }
+        messages += exerciseTitles(plan)
         return FitEncoder.encodeFile(messages)
+    }
+
+    /// One exercise_title per distinct exercise, in the order the steps first use them, as Gadgetbridge writes them.
+    private static func exerciseTitles(_ plan: WorkoutPlan) -> [FitEncodeMessage] {
+        var exercises: [WorkoutExercise] = []
+        for exercise in plan.steps.compactMap(\.exercise) where !exercises.contains(exercise) {
+            exercises.append(exercise)
+        }
+        return exercises.enumerated().map { index, exercise in
+            var fields = [field(0, .uint16, Int64(exercise.category))]
+            if let code = exercise.code {
+                fields.append(field(1, .uint16, Int64(code)))
+            }
+            fields += [text(2, exercise.name), field(254, .uint16, Int64(index))]
+            return FitEncodeMessage(globalNumber: 264, fields: fields)
+        }
     }
 
     private static func fileId() -> FitEncodeMessage {
@@ -41,7 +61,7 @@ public enum WorkoutFitEncoder {
             field(254, .uint16, 0),
             text(8, plan.name),
             field(4, .enumeration, Int64(plan.sport.rawValue)),
-            field(11, .enumeration, 0),
+            field(11, .enumeration, Int64(plan.subSport ?? 0)),
             field(5, .uint32z, capabilities),
             field(6, .uint16, Int64(plan.steps.count)),
         ])
@@ -66,7 +86,24 @@ public enum WorkoutFitEncoder {
         }
         fields += durationFields(step.duration)
         fields += targetFields(step.target, sport: sport)
+        fields += exerciseFields(step)
         return FitEncodeMessage(globalNumber: 27, fields: fields)
+    }
+
+    /// The exercise, and its weight in kilograms, of a strength step.
+    private static func exerciseFields(_ step: WorkoutStep) -> [FitEncodeField] {
+        var fields: [FitEncodeField] = []
+        if let exercise = step.exercise {
+            fields.append(field(10, .uint16, Int64(exercise.category)))
+            if let code = exercise.code {
+                fields.append(field(11, .uint16, Int64(code)))
+            }
+        }
+        if let kilograms = step.weightKg {
+            fields.append(field(12, .uint16, Int64((kilograms * weightScale).rounded())))
+            fields.append(field(13, .uint16, kilogramUnit))
+        }
+        return fields
     }
 
     private static func durationFields(_ duration: WorkoutDurationType) -> [FitEncodeField] {
@@ -85,6 +122,9 @@ public enum WorkoutFitEncoder {
             [field(1, .enumeration, 2), field(2, .uint32, Int64(bpm) + heartRateOffset)]
         case .heartRateGreaterThan(let bpm):
             [field(1, .enumeration, 3), field(2, .uint32, Int64(bpm) + heartRateOffset)]
+        case .reps(let count):
+            // Reps have no unit of their own; the count is the value.
+            [field(1, .enumeration, 29), field(2, .uint32, Int64(count))]
         case .repeatUntilStepsComplete:
             // Written by `stepMessage`, which is the only place a repeat is encoded.
             []

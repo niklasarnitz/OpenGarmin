@@ -5,7 +5,9 @@ struct WorkoutsView: View {
     @Environment(AppEnvironment.self) private var app
 
     @State private var plans = PreviewData.plans
+    @State private var trainingPlans: [TrainingPlan] = []
     @State private var isBuilding = false
+    @State private var isPlanning = false
     @State private var sendingPlanID: UUID?
     @State private var sentPlanID: UUID?
     @State private var sendCount = 0
@@ -14,7 +16,7 @@ struct WorkoutsView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if plans.isEmpty {
+                if plans.isEmpty && trainingPlans.isEmpty {
                     ContentUnavailableView {
                         Label("No workouts", systemImage: "list.bullet.clipboard")
                     } description: {
@@ -25,21 +27,38 @@ struct WorkoutsView: View {
                     }
                 } else {
                     List {
-                        ForEach(plans) { plan in
-                            row(plan)
+                        if !trainingPlans.isEmpty {
+                            Section("Training plans") {
+                                ForEach(trainingPlans) { plan in
+                                    NavigationLink(plan.name) { TrainingPlanView(plan: plan) }
+                                }
+                            }
                         }
-                        .onDelete { plans.remove(atOffsets: $0) }
+                        if !plans.isEmpty {
+                            Section("Workouts") {
+                                ForEach(plans) { plan in
+                                    row(plan)
+                                }
+                                .onDelete { plans.remove(atOffsets: $0) }
+                            }
+                        }
                     }
                 }
             }
             .navigationTitle("Workouts")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
+                    Button("New training plan", systemImage: "calendar.badge.plus") { isPlanning = true }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("New workout", systemImage: "plus") { isBuilding = true }
                 }
             }
             .sheet(isPresented: $isBuilding) {
                 WorkoutBuilderView { plans.append($0) }
+            }
+            .sheet(isPresented: $isPlanning) {
+                TrainingPlanEditor(workouts: plans) { trainingPlans.append($0) }
             }
             .sensoryFeedback(.success, trigger: sendCount)
             .alert("Couldn't send the workout", isPresented: Binding(

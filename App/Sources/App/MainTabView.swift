@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MainTabView: View {
-    enum Destination: Hashable { case today, activities, workouts, device }
+    enum Destination: Hashable { case today, insights, activities, workouts, device }
 
     @State private var selection: Destination = .today
 
@@ -9,6 +9,9 @@ struct MainTabView: View {
         TabView(selection: $selection) {
             Tab("Today", systemImage: "sun.max.fill", value: Destination.today) {
                 TodayView()
+            }
+            Tab("Insights", systemImage: "chart.xyaxis.line", value: Destination.insights) {
+                InsightsView()
             }
             Tab("Activities", systemImage: "figure.run", value: Destination.activities) {
                 ActivitiesView()

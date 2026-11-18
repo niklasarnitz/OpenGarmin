@@ -13,6 +13,10 @@ public enum FitExtractor {
         extractSpo2AndRespiration(file, into: &batch)
         extractHeartRateVariability(file, into: &batch)
         extractSleep(file, into: &batch)
+        extractRawSleep(file, into: &batch)
+        extractNaps(file, into: &batch)
+        extractHrvStatus(file, into: &batch)
+        extractTrainingMetrics(file, into: &batch)
         extractActivities(file, unitNumber: unitNumber, into: &batch)
         return batch
     }
@@ -168,6 +172,7 @@ public enum FitExtractor {
             let index = sessions.indices.min { distance(from: sessions[$0], to: ts) < distance(from: sessions[$1], to: ts) }
             if let index {
                 sessions[index].score = Int(score)
+                sessions[index].scoreBreakdown = sleepScoreBreakdown(message)
             }
         }
         batch.sleep += sessions
@@ -204,10 +209,17 @@ enum FitMesg {
     static let monitoringHrData: UInt16 = 211
     static let stressLevel: UInt16 = 227
     static let spo2Data: UInt16 = 269
+    static let sleepDataInfo: UInt16 = 273
+    static let sleepDataRaw: UInt16 = 274
     static let sleepLevel: UInt16 = 275
+    static let metricRecovery: UInt16 = 284
     static let respirationRate: UInt16 = 297
     static let sleepAssessment: UInt16 = 346
+    static let trainingReadiness: UInt16 = 369
+    static let hrvStatusSummary: UInt16 = 370
     static let hrvValue: UInt16 = 371
+    static let trainingLoad: UInt16 = 378
+    static let napEvent: UInt16 = 412
 }
 
 /// Field numbers of the monitoring message (global 55).
