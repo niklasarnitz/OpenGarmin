@@ -89,3 +89,27 @@ import GarminModels
     let values = steps.map { ($0 as! HKQuantitySample).quantity.doubleValue(for: .count()) }
     #expect(values == [50, 7])
 }
+
+@Test func coverageMergesWidenedIntervalsAndFindsOverlapsOnBothSides() {
+    let t = { (minutes: Double) in Date(timeIntervalSince1970: 100_000 + minutes * 60) }
+    // Garmin Connect heart rate readings at 0, 8 and 60 minutes; the first two merge once widened by 5 minutes.
+    let covered = HealthKitMapping.merged([
+        DateInterval(start: t(60), end: t(60)), DateInterval(start: t(0), end: t(0)), DateInterval(start: t(8), end: t(8)),
+    ], tolerance: 300)
+    #expect(covered == [DateInterval(start: t(-5), end: t(13)), DateInterval(start: t(55), end: t(65))])
+    #expect(HealthKitMapping.isCovered(t(-4), t(-4), by: covered))
+    #expect(HealthKitMapping.isCovered(t(12), t(12), by: covered))
+    // The gap between 13 and 55 minutes is data Connect never wrote, so OpenGarmin writes it.
+    #expect(!HealthKitMapping.isCovered(t(14), t(54), by: covered))
+    #expect(!HealthKitMapping.isCovered(t(-20), t(-6), by: covered))
+    #expect(!HealthKitMapping.isCovered(t(66), t(70), by: covered))
+    // An interval that spans a covered stretch overlaps it even though neither end lies inside.
+    #expect(HealthKitMapping.isCovered(t(50), t(70), by: covered))
+    #expect(!HealthKitMapping.isCovered(t(0), t(0), by: []))
+}
+
+@Test func onlyGarminConnectCountsAsAlreadyInHealth() {
+    #expect(HealthKitMapping.isGarminConnect(bundleIdentifier: "com.garmin.connect.mobile"))
+    #expect(!HealthKitMapping.isGarminConnect(bundleIdentifier: "com.niklasarnitz.opengarmin"))
+    #expect(!HealthKitMapping.isGarminConnect(bundleIdentifier: "com.apple.health"))
+}

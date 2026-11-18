@@ -91,7 +91,6 @@ enum HealthKitMapping {
             ("restingEnergyKcal", intervals(batch.restingEnergyKcal, .basalEnergyBurned, .kilocalorie(), device)),
             ("distance", intervals(batch.distance, .distanceWalkingRunning, .meter(), device)),
             ("floorsClimbed", intervals(batch.floorsClimbed, .flightsClimbed, .count(), device)),
-            ("intensityMinutes", intervals(batch.intensityMinutes, .appleExerciseTime, .minute(), device)),
             ("spo2", points(batch.spo2, .oxygenSaturation, .percent(), device)),
             ("respirationRate", points(batch.respirationRate, .respiratoryRate, bpm, device)),
             // Garmin's HRV is RMSSD, but HealthKit's only HRV type is SDNN. The values are stored as SDNN anyway,
@@ -146,6 +145,40 @@ enum HealthKitMapping {
                          device: device,
                          metadata: syncMetadata(syncIdentifier("sleep", epochMillis(start), epochMillis(end),
                                                                String(value.rawValue))))
+    }
+
+    /// Garmin Connect writes under bundle identifiers such as "com.garmin.connect.mobile".
+    static func isGarminConnect(bundleIdentifier: String) -> Bool {
+        bundleIdentifier.hasPrefix("com.garmin.")
+    }
+
+    /// Five minutes either side of what another app wrote, so a heart rate point a minute away from one of its
+    /// readings still counts as already in Health.
+    static let coverageTolerance: TimeInterval = 300
+
+    /// Sorted, disjoint intervals covering `intervals`, each widened by `tolerance` on both sides.
+    static func merged(_ intervals: [DateInterval], tolerance: TimeInterval) -> [DateInterval] {
+        var result: [DateInterval] = []
+        for interval in intervals.sorted(by: { $0.start < $1.start }) {
+            let start = interval.start.addingTimeInterval(-tolerance), end = interval.end.addingTimeInterval(tolerance)
+            if let last = result.last, start <= last.end {
+                result[result.count - 1] = DateInterval(start: last.start, end: max(last.end, end))
+            } else {
+                result.append(DateInterval(start: start, end: end))
+            }
+        }
+        return result
+    }
+
+    /// Whether `start...end` touches one of `covered`, which must come from `merged`.
+    static func isCovered(_ start: Date, _ end: Date, by covered: [DateInterval]) -> Bool {
+        // The first interval that ends at or after `start` is the only candidate.
+        var low = 0, high = covered.count
+        while low < high {
+            let mid = (low + high) / 2
+            if covered[mid].end < start { low = mid + 1 } else { high = mid }
+        }
+        return low < covered.count && covered[low].start <= end
     }
 
     static func syncMetadata(_ identifier: String) -> [String: Any] {

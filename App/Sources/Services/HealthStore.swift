@@ -11,7 +11,7 @@ enum HealthStore {
         HKQuantityType(.activeEnergyBurned), HKQuantityType(.basalEnergyBurned),
         HKQuantityType(.distanceWalkingRunning), HKQuantityType(.flightsClimbed),
         HKQuantityType(.oxygenSaturation), HKQuantityType(.respiratoryRate),
-        HKQuantityType(.heartRateVariabilitySDNN), HKCategoryType(.sleepAnalysis), HKObjectType.workoutType(),
+        HKQuantityType(.heartRateVariabilitySDNN), HKCategoryType(.sleepAnalysis), HKObjectType.workoutType(), HKSeriesType.workoutRoute(),
     ]
 
     private static let readTypes: Set<HKObjectType> = Set(shareTypes.map { $0 as HKObjectType }).union([

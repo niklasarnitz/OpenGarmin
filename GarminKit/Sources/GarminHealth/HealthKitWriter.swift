@@ -12,6 +12,10 @@ public enum HealthKitWriterError: Error, Equatable {
 public struct SaveSummary: Sendable, Equatable {
     /// Samples written per HealthBatch field, e.g. "heartRate" or "steps". Sleep stages are counted under "sleep".
     public var samplesWritten: [String: Int] = [:]
+    /// Samples left out per field because Garmin Connect already wrote data for that time.
+    public var samplesAlreadyInHealth: [String: Int] = [:]
+    /// Activities left out because Health already has a workout from another app at that time.
+    public var workoutsAlreadyInHealth = 0
     public var sleepSessionsWritten = 0
     public var workoutsWritten = 0
     public var routePointsWritten = 0
@@ -22,7 +26,8 @@ public struct SaveSummary: Sendable, Equatable {
 }
 
 /// Writes Garmin data to Apple Health. Saves are idempotent: every object carries a sync identifier and version,
-/// so syncing the same watch data again replaces the saved objects instead of duplicating them.
+/// so syncing the same watch data again replaces the saved objects instead of duplicating them. Data Garmin Connect
+/// already wrote to Health is left out, so a watch that was also synced with Connect is not counted twice.
 public actor HealthKitWriter {
     private let store: HKHealthStore
 
@@ -44,9 +49,16 @@ public actor HealthKitWriter {
                               firmwareVersion: firmware, softwareVersion: nil, localIdentifier: nil,
                               udiDeviceIdentifier: nil)
         var summary = SaveSummary()
-        let groups = HealthKitMapping.samples(for: batch, device: device)
-        for group in groups { summary.samplesWritten[group.field] = group.samples.count }
+        var groups = HealthKitMapping.samples(for: batch, device: device)
+        for index in groups.indices {
+            let kept = await withoutGarminConnectData(groups[index].samples)
+            summary.samplesAlreadyInHealth[groups[index].field] = groups[index].samples.count - kept.count
+            groups[index].samples = kept
+            summary.samplesWritten[groups[index].field] = kept.count
+        }
         summary.sleepSessionsWritten = batch.sleep.count
+        // HealthKit lets only Apple write exercise minutes.
+        if !batch.intensityMinutes.isEmpty { summary.skipped.append("intensityMinutes: appleExerciseTime is read-only") }
         if !batch.stress.isEmpty { summary.skipped.append("stress: no HealthKit type") }
         if !batch.bodyBattery.isEmpty { summary.skipped.append("bodyBattery: no HealthKit type") }
         // A first sync can hold weeks of samples; save them in large chunks rather than one unbounded call.
@@ -56,7 +68,12 @@ public actor HealthKitWriter {
         }
 
         #if os(iOS)
+        let otherWorkouts = await workoutsFromOtherApps(overlapping: batch.activities)
         for activity in batch.activities {
+            if HealthKitMapping.isCovered(activity.start, activity.end, by: otherWorkouts) {
+                summary.workoutsAlreadyInHealth += 1
+                continue
+            }
             try await saveWorkout(activity, device: device)
             summary.workoutsWritten += 1
             summary.routePointsWritten += activity.records.filter { $0.latitude != nil && $0.longitude != nil }.count
@@ -88,15 +105,44 @@ public actor HealthKitWriter {
         HKQuantityType(.heartRate), HKQuantityType(.restingHeartRate), HKQuantityType(.stepCount),
         HKQuantityType(.activeEnergyBurned), HKQuantityType(.basalEnergyBurned),
         HKQuantityType(.distanceWalkingRunning), HKQuantityType(.flightsClimbed),
-        HKQuantityType(.appleExerciseTime), HKQuantityType(.oxygenSaturation), HKQuantityType(.respiratoryRate),
+        HKQuantityType(.oxygenSaturation), HKQuantityType(.respiratoryRate),
         HKQuantityType(.heartRateVariabilitySDNN), HKCategoryType(.sleepAnalysis),
         HKWorkoutType.workoutType(), HKSeriesType.workoutRoute(),
     ]
 
-    private static let readTypes: Set<HKObjectType> = [
+    /// The written types are also read, to find what Garmin Connect already wrote.
+    private static let readTypes: Set<HKObjectType> = Set(writeTypes.map { $0 as HKObjectType }).union([
         HKCharacteristicType(.dateOfBirth), HKCharacteristicType(.biologicalSex),
         HKQuantityType(.height), HKQuantityType(.bodyMass),
-    ]
+    ])
+
+    /// `samples` (all of one type) without those whose time Garmin Connect already covers in Health. Without read
+    /// access the query finds nothing, so everything is written.
+    private func withoutGarminConnectData(_ samples: [HKSample]) async -> [HKSample] {
+        guard let type = samples.first?.sampleType,
+              let start = samples.map(\.startDate).min(), let end = samples.map(\.endDate).max() else { return samples }
+        let range = HKQuery.predicateForSamples(withStart: start.addingTimeInterval(-HealthKitMapping.coverageTolerance),
+                                                end: end.addingTimeInterval(HealthKitMapping.coverageTolerance))
+        let descriptor = HKSampleQueryDescriptor(predicates: [.sample(type: type, predicate: range)], sortDescriptors: [])
+        let existing = (try? await descriptor.result(for: store)) ?? []
+        let covered = HealthKitMapping.merged(
+            existing.filter { HealthKitMapping.isGarminConnect(bundleIdentifier: $0.sourceRevision.source.bundleIdentifier) }
+                .map { DateInterval(start: $0.startDate, end: $0.endDate) },
+            tolerance: HealthKitMapping.coverageTolerance)
+        guard !covered.isEmpty else { return samples }
+        return samples.filter { !HealthKitMapping.isCovered($0.startDate, $0.endDate, by: covered) }
+    }
+
+    /// Workouts any other app (Garmin Connect, Apple Watch, Strava) saved during these activities.
+    private func workoutsFromOtherApps(overlapping activities: [Activity]) async -> [DateInterval] {
+        guard let start = activities.map(\.start).min(), let end = activities.map(\.end).max() else { return [] }
+        let descriptor = HKSampleQueryDescriptor(
+            predicates: [.workout(HKQuery.predicateForSamples(withStart: start, end: end))], sortDescriptors: [])
+        let own = Bundle.main.bundleIdentifier ?? "com.niklasarnitz.opengarmin"
+        let workouts = ((try? await descriptor.result(for: store)) ?? [])
+            .filter { $0.sourceRevision.source.bundleIdentifier != own }
+        return HealthKitMapping.merged(workouts.map { DateInterval(start: $0.startDate, end: $0.endDate) }, tolerance: 0)
+    }
 
     private func latest(_ id: HKQuantityTypeIdentifier, unit: HKUnit) async -> Double? {
         let descriptor = HKSampleQueryDescriptor(predicates: [.quantitySample(type: HKQuantityType(id))],
