@@ -342,6 +342,24 @@ private func serveDownloads(_ files: [UInt16: Data]) -> @MainActor (GFDIFrame) -
 }
 
 @MainActor
+@Test func batchWithoutFileIsImportedOnceAndKnownAfterwards() async throws {
+    let store = try makeStore()
+    let log = ImportLog(store: store)
+    let now = Date.now
+    var batch = HealthBatch()
+    batch.stress = [PointSample(date: now.addingTimeInterval(-3600), value: 30)]
+    batch.bodyBattery = [PointSample(date: now.addingTimeInterval(-3600), value: 80)]
+
+    try await log.importer.acceptBatch(batch, fileKey: "connect-daily-1")
+    try await waitUntil { log.imported.count == 1 }
+
+    #expect(log.history.stress == batch.stress)
+    #expect(log.history.bodyBattery == batch.bodyBattery)
+    #expect(await log.importer.isKnown("connect-daily-1"))
+    #expect(await log.importer.snapshotWrites == 1)
+}
+
+@MainActor
 @Test func inboxFilesLeftByAStoppedAppAreImportedOnRestart() async throws {
     let store = try makeStore()
     // The app stopped after the downloads and before the import ran, so the files are still in the inbox.

@@ -7,7 +7,7 @@ let package = Package(
     products: [
         .library(name: "GarminKit", targets: [
             "GarminCore", "GarminModels", "GarminProtobuf", "GarminProtocol", "GarminFIT",
-            "GarminTransport", "GarminDevices", "GarminSession", "GarminHealth", "GarminShared", "GarminExport",
+            "GarminTransport", "GarminDevices", "GarminSession", "GarminHealth", "GarminShared", "GarminExport", "GarminConnect",
         ]),
     ],
     dependencies: [
@@ -39,6 +39,9 @@ let package = Package(
         .target(name: "GarminShared", dependencies: ["GarminModels"]),
         // Exports of an activity: GPX text, and the raw FIT file found in the session store.
         .target(name: "GarminExport", dependencies: ["GarminModels", "GarminFIT"]),
+        // Garmin Connect account import: SSO sign-in, OAuth tokens, activity originals and daily stress. Pure networking
+        // and parsing; the app feeds its output into the watch session's import stage.
+        .target(name: "GarminConnect", dependencies: ["GarminModels"]),
 
         .testTarget(name: "GarminCoreTests", dependencies: ["GarminCore"]),
         .testTarget(name: "GarminModelsTests", dependencies: ["GarminModels"]),
@@ -46,6 +49,7 @@ let package = Package(
         .testTarget(name: "GarminFITTests", dependencies: ["GarminFIT"], resources: [.copy("Fixtures")]),
         .testTarget(name: "GarminTransportTests", dependencies: ["GarminTransport"]),
         .testTarget(name: "GarminDevicesTests", dependencies: ["GarminDevices"]),
+        .testTarget(name: "GarminConnectTests", dependencies: ["GarminConnect", "GarminModels"]),
         .testTarget(name: "GarminHealthTests", dependencies: ["GarminHealth", "GarminModels"]),
         .testTarget(name: "GarminSharedTests", dependencies: ["GarminShared", "GarminModels"]),
         .testTarget(name: "GarminExportTests", dependencies: ["GarminExport", "GarminModels", "GarminFIT"]),

@@ -40,6 +40,12 @@ actor FITImporter {
         start()
     }
 
+    /// Merges a batch that has no FIT file into the history at once, as one import under `fileKey`.
+    func acceptBatch(_ batch: HealthBatch, fileKey: String) throws {
+        try history.commit([HistoryStore.Entry(key: fileKey, batch: batch)])
+        report(.imported(batch, history: history.history))
+    }
+
     /// Whether the file is imported or waiting in the inbox. Either way it is safe to archive on the watch.
     func isKnown(_ fileKey: String) -> Bool {
         history.isImported(fileKey) || FileManager.default.fileExists(atPath: history.inboxFile(for: fileKey).path)
