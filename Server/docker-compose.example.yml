@@ -1,0 +1,63 @@
+# Copy to docker-compose.yml, change every "change-me", then: docker compose up -d
+# The server reads its settings from the environment only (see Server/README section in the repo README).
+
+services:
+  server:
+    image: ghcr.io/niklasarnitz/opengarmin-server:main
+    # To build from source instead, use the repository root as context:
+    # build:
+    #   context: ..
+    #   dockerfile: Server/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://opengarmin:change-me@db:5432/opengarmin
+      # Raw FIT files. Used when OPENGARMIN_S3_ENDPOINT is unset; ignored otherwise.
+      OPENGARMIN_DATA_DIR: /data
+      # Only the first account can be created unless this is "true".
+      OPENGARMIN_ALLOW_SIGNUP: "false"
+      # Optional S3 storage for raw FIT files (any S3 API: versitygw, MinIO, AWS).
+      # OPENGARMIN_S3_ENDPOINT: http://minio:9000
+      # OPENGARMIN_S3_REGION: de-01
+      # OPENGARMIN_S3_BUCKET: opengarmin
+      # OPENGARMIN_S3_ACCESS_KEY: change-me
+      # OPENGARMIN_S3_SECRET_KEY: change-me
+    volumes:
+      - ./data:/data
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: opengarmin
+      POSTGRES_PASSWORD: change-me
+      POSTGRES_DB: opengarmin
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opengarmin -d opengarmin"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Optional: S3 for raw FIT files. Create the bucket named in OPENGARMIN_S3_BUCKET in the console (port 9001)
+  # after the first start, then uncomment the OPENGARMIN_S3_* lines above.
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: change-me
+      MINIO_ROOT_PASSWORD: change-me-long-secret
+    volumes:
+      - minio:/data
+    ports:
+      - "9001:9001"
+
+volumes:
+  pgdata:
+  minio:

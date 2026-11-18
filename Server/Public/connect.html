@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenGarmin · Connect sleep mapping</title>
+<style>
+  body { font: 15px/1.45 -apple-system, system-ui, sans-serif; margin: 2rem auto; max-width: 56rem; padding: 0 1rem; color: #1d1d1f; }
+  h1 { font-size: 1.4rem; }
+  table { border-collapse: collapse; width: 100%; margin: 0.5rem 0 2rem; }
+  th, td { text-align: left; padding: 0.35rem 0.6rem; border-bottom: 1px solid #e5e5ea; font-variant-numeric: tabular-nums; }
+  th { font-weight: 600; color: #6e6e73; }
+  .muted { color: #6e6e73; }
+  .error { color: #b00020; }
+</style>
+</head>
+<body>
+<h1>Connect sleep stage mapping</h1>
+<p class="muted">Which raw sleep level code Garmin Connect uses for which stage, checked against each night's own stage totals. Sign in to the dashboard first; this page uses the same session.</p>
+<p id="status" class="muted">Loading…</p>
+<h2>Mapping agreement</h2>
+<table id="agreement"><thead><tr><th>Code</th><th>Stage</th><th>Nights</th><th>Share</th></tr></thead><tbody></tbody></table>
+<h2>Nights that disagree with Garmin's totals</h2>
+<table id="mismatches"><thead><tr><th>Day</th><th>Minutes per code (0–3)</th><th>Garmin totals (min)</th></tr></thead><tbody></tbody></table>
+<script>
+  const cell = (text) => { const td = document.createElement("td"); td.textContent = text; return td; };
+  const row = (...values) => { const tr = document.createElement("tr"); values.forEach((v) => tr.appendChild(cell(v))); return tr; };
+  const fmt = (dict) => Object.keys(dict).sort().map((k) => `${k}=${Math.round(dict[k])}`).join(" ");
+
+  fetch("/api/v1/connect/diagnostics", { credentials: "same-origin" })
+    .then((res) => {
+      if (!res.ok) throw new Error(res.status === 401 ? "Not signed in." : `Request failed (${res.status}).`);
+      return res.json();
+    })
+    .then((data) => {
+      document.getElementById("status").textContent = `${data.nights} nights checked, ${data.mismatches.length} disagree.`;
+      const agreement = document.querySelector("#agreement tbody");
+      data.mappingAgreement.forEach((m) => agreement.appendChild(row(String(m.code), m.stage, String(m.nights), `${Math.round(m.share * 100)}%`)));
+      const mismatches = document.querySelector("#mismatches tbody");
+      data.mismatches.forEach((m) => mismatches.appendChild(row(m.day, fmt(m.minutesPerCode), fmt(m.dtoTotals))));
+    })
+    .catch((error) => {
+      const status = document.getElementById("status");
+      status.className = "error";
+      status.textContent = error.message;
+    });
+</script>
+</body>
+</html>
