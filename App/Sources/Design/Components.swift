@@ -154,8 +154,17 @@ struct SeriesChart: View {
         }
     }
 
+    /// Readings averaged into buckets once the chart spans more than a day and a half, so multi-day stress or
+    /// Body Battery draws as a trend instead of noise.
+    private var shown: [PointSample] { ChartSmoothing.smoothed(points) }
+
+    private var spansDays: Bool {
+        guard let first = points.first?.date, let last = points.last?.date else { return false }
+        return abs(last.timeIntervalSince(first)) > 36 * 3600
+    }
+
     private var chart: some View {
-        Chart(points, id: \.date) { point in
+        Chart(shown, id: \.date) { point in
             AreaMark(x: .value("Time", point.date), y: .value(label, point.value))
                 .foregroundStyle(LinearGradient(colors: [tint.opacity(0.32), tint.opacity(0)],
                                                 startPoint: .top, endPoint: .bottom))
@@ -168,7 +177,7 @@ struct SeriesChart: View {
         .chartYScale(domain: .automatic(includesZero: false))
         .chartXAxis {
             AxisMarks(values: .automatic(desiredCount: 4)) { _ in
-                AxisValueLabel(format: .dateTime.hour().minute())
+                AxisValueLabel(format: spansDays ? .dateTime.day().month(.abbreviated) : .dateTime.hour().minute())
                     .font(.caption2)
             }
         }

@@ -43,8 +43,8 @@ public final class GarminWatchService: WatchService {
     public private(set) var battery: BatteryStatus?
     public private(set) var nearby: [NearbyWatch] = []
     public private(set) var installedApps: [InstalledApp] = []
-    /// The retained history: every imported activity, stress and Body Battery of the last year, and
-    /// the other samples of the last 30 days.
+    /// The retained history: every imported activity, 90 days of daily data (steps, sleep, stress,
+    /// Body Battery, resting heart rate, HRV), and 30 days of heart rate, SpO2 and respiration.
     public private(set) var latest: HealthBatch
     public private(set) var fileProgress: FileTransferProgress?
     public let events: AsyncStream<WatchEvent>

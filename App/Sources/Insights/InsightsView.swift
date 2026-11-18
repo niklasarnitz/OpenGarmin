@@ -7,21 +7,25 @@ import GarminModels
 struct InsightsView: View {
     @Environment(AppEnvironment.self) private var app
 
-    @State private var range: TrendRange = .week
-
-    enum TrendRange: String, CaseIterable, Identifiable {
-        case week = "Week", month = "Month"
-        var id: Self { self }
-        var days: Int { self == .week ? 7 : 30 }
-    }
+    @State private var preset: ChartRangePreset = .lastWeek
+    @State private var customFrom = Calendar.current.date(byAdding: .day, value: -13, to: .now) ?? .now
+    @State private var customTo = Date.now
 
     private var data: HealthBatch { app.watch.latest }
 
+    /// The selected range in whole days.
+    private var interval: DateInterval { preset.interval(now: .now, from: customFrom, to: customTo) }
+
+    private var rangeDays: Int { Int((interval.duration / 86_400).rounded()) }
+
     /// The daily insights of the selected range, oldest first.
     private var trend: [DayInsight] {
-        let calendar = Calendar.current
-        let cutoff = calendar.date(byAdding: .day, value: -range.days, to: calendar.startOfDay(for: .now)) ?? .distantPast
-        return HealthInsights.days(data).filter { $0.day >= cutoff }
+        HealthInsights.days(data).filter { interval.contains($0.day) }
+    }
+
+    /// The phone keeps three months; anything before that comes from the backend.
+    private var reachesPastPhoneHistory: Bool {
+        interval.start < Calendar.current.date(byAdding: .day, value: -90, to: Calendar.current.startOfDay(for: .now))!
     }
 
     var body: some View {
@@ -32,13 +36,10 @@ struct InsightsView: View {
                                   message: "Sync your watch to see training, recovery and trends here.")
                 } else {
                     VStack(spacing: 16) {
+                        rangePicker
                         stressAndBattery
                         trainingStatus
                         hrvStatus
-                        Picker("Range", selection: $range) {
-                            ForEach(TrendRange.allCases) { Text($0.rawValue).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
                         dailyChart("Resting heart rate", symbol: "heart", tint: Palette.ember, unit: "bpm") { $0.restingHeartRate }
                         dailyChart("Sleep", symbol: "bed.double.fill", tint: Palette.dusk, unit: "h") { $0.sleepMinutes.map { $0 / 60 } }
                         dailyChart("Sleep score", symbol: "star.fill", tint: Palette.amber, unit: "") { $0.sleepScore.map { Double($0) } }
@@ -55,17 +56,42 @@ struct InsightsView: View {
         }
     }
 
+    // MARK: - Range
+
+    private var rangePicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("Range", selection: $preset) {
+                ForEach(ChartRangePreset.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.menu)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if preset == .custom {
+                DatePicker("From", selection: $customFrom, in: ...Date.now, displayedComponents: .date)
+                DatePicker("To", selection: $customTo, in: ...Date.now, displayedComponents: .date)
+            }
+            Text(interval.start.formatted(date: .abbreviated, time: .omitted) + " – "
+                 + interval.end.addingTimeInterval(-1).formatted(date: .abbreviated, time: .omitted))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if reachesPastPhoneHistory {
+                Text("The phone keeps the last three months. Older data comes from your backend.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
     // MARK: - Stress and body battery
 
     private var stressAndBattery: some View {
         VStack(spacing: 16) {
             MetricTile("Stress", symbol: "bolt.heart.fill", tint: Palette.amber) {
                 MetricFigure(value: data.stress.latest.map { Formatting.whole($0) } ?? "–", unit: "/ 100")
-                SeriesChart(points: data.stress, tint: Palette.amber, label: "Stress", height: 130)
+                SeriesChart(points: data.stress.filter { interval.contains($0.date) }, tint: Palette.amber, label: "Stress", height: 130)
             }
             MetricTile("Body battery", symbol: "battery.75percent", tint: Palette.lichen) {
                 MetricFigure(value: data.bodyBattery.latest.map { Formatting.whole($0) } ?? "–", unit: "/ 100")
-                SeriesChart(points: data.bodyBattery, tint: Palette.lichen, label: "Body battery", height: 130)
+                SeriesChart(points: data.bodyBattery.filter { interval.contains($0.date) }, tint: Palette.lichen, label: "Body battery", height: 130)
             }
         }
     }
@@ -112,15 +138,38 @@ struct InsightsView: View {
         let points = trend.compactMap { day in value(day).map { PointSample(date: day.day, value: $0) } }
         return MetricTile(LocalizedStringKey(title), symbol: symbol, tint: tint) {
             MetricFigure(value: points.latest.map { Formatting.whole($0) } ?? "–", unit: unit, size: 34)
-            Chart(points, id: \.date) { point in
-                BarMark(x: .value("Day", point.date, unit: .day), y: .value(title, point.value))
-                    .foregroundStyle(tint.gradient)
-                    .cornerRadius(4)
+            Chart {
+                // Up to two months each day is a bar; longer ranges draw the 7-day mean as a line.
+                if rangeDays <= 62 {
+                    ForEach(points, id: \.date) { point in
+                        BarMark(x: .value("Day", point.date, unit: .day), y: .value(title, point.value))
+                            .foregroundStyle(tint.gradient)
+                            .cornerRadius(4)
+                    }
+                } else {
+                    ForEach(ChartSmoothing.rollingMean(points, days: 7), id: \.date) { point in
+                        LineMark(x: .value("Day", point.date), y: .value(title, point.value))
+                            .foregroundStyle(tint)
+                            .lineStyle(StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                            .interpolationMethod(.monotone)
+                    }
+                }
             }
+            .chartXScale(domain: interval.start...interval.end)
             .chartXAxis {
-                AxisMarks(values: .stride(by: .day, count: range == .week ? 1 : 7)) { _ in
-                    AxisValueLabel(format: .dateTime.day().month(.abbreviated))
-                        .font(.caption2)
+                switch rangeDays {
+                case ...8:
+                    AxisMarks(values: .stride(by: .day)) { _ in
+                        AxisValueLabel(format: .dateTime.weekday(.abbreviated)).font(.caption2)
+                    }
+                case ...62:
+                    AxisMarks(values: .stride(by: .day, count: 7)) { _ in
+                        AxisValueLabel(format: .dateTime.day().month(.abbreviated)).font(.caption2)
+                    }
+                default:
+                    AxisMarks(values: .stride(by: .month, count: rangeDays > 200 ? 2 : 1)) { _ in
+                        AxisValueLabel(format: .dateTime.month(.abbreviated)).font(.caption2)
+                    }
                 }
             }
             .frame(height: 140)
@@ -183,6 +232,18 @@ struct InsightsView: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+extension ChartRangePreset {
+    var title: LocalizedStringKey {
+        switch self {
+        case .lastWeek: "Last week"
+        case .thisMonth: "This month"
+        case .lastMonth: "Last month"
+        case .thisYear: "This year"
+        case .custom: "Custom range"
+        }
     }
 }
 

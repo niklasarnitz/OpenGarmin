@@ -716,19 +716,26 @@ private extension Array where Element == GFDISessionOutput {
 }
 
 @MainActor
-@Test func historyKeepsStressAndBodyBatteryForAYearAndOtherSamplesFor30Days() throws {
+@Test func historyKeepsDailyDataFor90DaysAndDenseStreamsFor30Days() throws {
     let store = try makeStore()
     var history = HistoryStore(directory: store.directory)
     let now = Date(timeIntervalSince1970: 2_000_000_000)
     let days = { (count: Double) in now.addingTimeInterval(-count * 86_400) }
     var batch = HealthBatch()
-    // 100 days old: past the 30-day window, inside the year.
-    batch.stress = [PointSample(date: days(100), value: 40), PointSample(date: days(370), value: 41)]
-    batch.bodyBattery = [PointSample(date: days(100), value: 60), PointSample(date: days(370), value: 61)]
-    batch.heartRate = [HeartRateSample(date: days(100), bpm: 70), HeartRateSample(date: days(29), bpm: 71)]
+    // 60 days old: past the 30-day window for dense streams, inside the 90 days for daily data; 95 days is past both.
+    batch.stress = [PointSample(date: days(60), value: 40), PointSample(date: days(95), value: 41)]
+    batch.bodyBattery = [PointSample(date: days(60), value: 60), PointSample(date: days(95), value: 61)]
+    batch.restingHeartRate = [PointSample(date: days(60), value: 52), PointSample(date: days(95), value: 53)]
+    batch.steps = [IntervalSample(start: days(60), end: days(60).addingTimeInterval(900), value: 500),
+                   IntervalSample(start: days(95), end: days(95).addingTimeInterval(900), value: 501)]
+    batch.sleep = [SleepSession(start: days(60), end: days(60).addingTimeInterval(8 * 3600), intervals: [])]
+    batch.heartRate = [HeartRateSample(date: days(60), bpm: 70), HeartRateSample(date: days(29), bpm: 71)]
     try history.commit([HistoryStore.Entry(key: "a", batch: batch)], now: now)
 
     #expect(history.history.stress.map(\.value) == [40])
     #expect(history.history.bodyBattery.map(\.value) == [60])
+    #expect(history.history.restingHeartRate.map(\.value) == [52])
+    #expect(history.history.steps.map(\.value) == [500])
+    #expect(history.history.sleep.count == 1)
     #expect(history.history.heartRate.map(\.bpm) == [71])
 }

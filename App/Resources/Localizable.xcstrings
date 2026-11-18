@@ -631,6 +631,16 @@
         }
       }
     },
+    "Custom range" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eigener Zeitraum"
+          }
+        }
+      }
+    },
     "Daily totals, runs and rides with routes, laps and metrics." : {
       "localizations" : {
         "de" : {
@@ -881,6 +891,16 @@
         }
       }
     },
+    "From" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Von"
+          }
+        }
+      }
+    },
     "GPS satellite data" : {
       "localizations" : {
         "de" : {
@@ -1051,6 +1071,16 @@
         }
       }
     },
+    "Last month" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Letzter Monat"
+          }
+        }
+      }
+    },
     "Last night" : {
       "localizations" : {
         "de" : {
@@ -1077,6 +1107,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Letzte Aktualisierung"
+          }
+        }
+      }
+    },
+    "Last week" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Letzte Woche"
           }
         }
       }
@@ -1991,6 +2031,16 @@
         }
       }
     },
+    "The phone keeps the last three months. Older data comes from your backend." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das iPhone speichert die letzten drei Monate. Ältere Daten kommen von deinem Backend."
+          }
+        }
+      }
+    },
     "The watch shows events from now until this far ahead." : {
       "localizations" : {
         "de" : {
@@ -2001,12 +2051,42 @@
         }
       }
     },
+    "This month" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Monat"
+          }
+        }
+      }
+    },
+    "This year" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Jahr"
+          }
+        }
+      }
+    },
     "Time" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zeit"
+          }
+        }
+      }
+    },
+    "To" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bis"
           }
         }
       }

@@ -87,7 +87,8 @@ struct TodayView: View {
     private var heartRate: some View {
         MetricTile("Heart rate", symbol: "heart.fill", tint: Palette.ember) {
             MetricFigure(value: heartRateNow.map(String.init) ?? "–", unit: "bpm")
-            SeriesChart(points: data.heartRate.map { PointSample(date: $0.date, value: Double($0.bpm)) },
+            SeriesChart(points: data.heartRate.filter { Calendar.current.isDateInToday($0.date) }
+                            .map { PointSample(date: $0.date, value: Double($0.bpm)) },
                         tint: Palette.ember, label: "Heart rate", height: 150)
         }
         .accessibilityElement(children: .combine)
@@ -138,7 +139,7 @@ struct TodayView: View {
 
     private var stress: some View {
         MetricTile("Stress", symbol: "bolt.heart.fill", tint: Palette.amber) {
-            SeriesChart(points: data.stress, tint: Palette.amber, label: "Stress", height: 120)
+            SeriesChart(points: data.stress.filter { Calendar.current.isDateInToday($0.date) }, tint: Palette.amber, label: "Stress", height: 120)
         }
         .accessibilityElement(children: .combine)
     }
