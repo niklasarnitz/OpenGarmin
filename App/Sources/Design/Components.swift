@@ -86,6 +86,8 @@ struct RingGauge: View {
 struct WatchStatusPill: View {
     let state: WatchConnectionState
     let battery: BatteryStatus?
+    /// Off in a toolbar, which already gives its items a glass capsule; a second one drew a double border.
+    var glass = true
 
     var body: some View {
         HStack(spacing: 7) {
@@ -99,9 +101,9 @@ struct WatchStatusPill: View {
             }
         }
         .font(.caption.weight(.semibold))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .glassEffect(.regular, in: .capsule)
+        .padding(.horizontal, glass ? 12 : 4)
+        .padding(.vertical, glass ? 8 : 0)
+        .glassEffect(glass ? .regular : .identity, in: .capsule)
         .accessibilityElement(children: .combine)
     }
 }
@@ -142,6 +144,12 @@ struct SeriesChart: View {
     let label: String
     var height: CGFloat = 120
     var showsAxis = true
+    /// Garmin writes 0 when it could not measure (stress, Body Battery, heart rate). Those stretches are drawn as
+    /// greyed "no data" ranges and the line breaks there. Off for series where 0 is a real value, such as speed.
+    var zeroMeansNoData = false
+    /// The time the chart covers, such as today or the selected Insights range. With `zeroMeansNoData`, the stretch
+    /// before the first and after the last reading is greyed too (up to now), and the x axis spans the whole range.
+    var domain: DateInterval?
 
     var body: some View {
         if points.isEmpty {
@@ -154,21 +162,107 @@ struct SeriesChart: View {
         }
     }
 
-    private var chart: some View {
-        Chart(points, id: \.date) { point in
-            AreaMark(x: .value("Time", point.date), y: .value(label, point.value))
-                .foregroundStyle(LinearGradient(colors: [tint.opacity(0.32), tint.opacity(0)],
-                                                startPoint: .top, endPoint: .bottom))
-                .interpolationMethod(.monotone)
-            LineMark(x: .value("Time", point.date), y: .value(label, point.value))
-                .foregroundStyle(tint)
-                .lineStyle(StrokeStyle(lineWidth: 2.2, lineCap: .round))
-                .interpolationMethod(.monotone)
+    private var span: TimeInterval {
+        guard let first = points.map(\.date).min(), let last = points.map(\.date).max() else { return 0 }
+        return last.timeIntervalSince(first)
+    }
+
+    private var spansDays: Bool { (domain?.duration ?? span) > 36 * 3600 }
+
+    /// The span the smoothing buckets are sized for: the whole chart, so every line piece is averaged alike.
+    private var smoothingSpan: TimeInterval { max(domain?.duration ?? 0, span) }
+
+    /// The line's pieces and the greyed ranges between them. Gaps shorter than ten minutes, or than one smoothing
+    /// bucket on multi-day charts, are left out so single dropped readings do not hatch the chart.
+    private var layout: (segments: [[PointSample]], gaps: [DateInterval]) {
+        guard zeroMeansNoData else { return ([ChartSmoothing.smoothed(points, span: smoothingSpan)], []) }
+        let bucket = ChartSmoothing.bucketWidth(forSpan: smoothingSpan) ?? 0
+        let whole = domain?.duration ?? span
+        // Stress and Body Battery come every few minutes; half an hour without any reading (power saving, watch
+        // off) is a gap, as is anything longer than two smoothing buckets on multi-day charts. An activity of an
+        // hour records every second, so its limits shrink with its length: a 72-second hole, a 36-second stop.
+        let spacing = max(min(1800, whole / 50), 2 * bucket)
+        let split = ChartGaps.split(points, maxSpacing: spacing)
+        let shortest = max(min(600, whole / 100), bucket)
+        var gaps = split.gaps.filter { $0.duration >= shortest }
+        let readings = split.segments.joined().map(\.date)
+        if let domain {
+            let end = min(domain.end, .now)
+            if let first = readings.min(), first.timeIntervalSince(domain.start) > shortest {
+                gaps.append(DateInterval(start: domain.start, end: first))
+            }
+            if let last = readings.max(), end.timeIntervalSince(last) > spacing {
+                gaps.append(DateInterval(start: last, end: end))
+            }
+            if readings.isEmpty, end > domain.start { gaps.append(DateInterval(start: domain.start, end: end)) }
         }
-        .chartYScale(domain: .automatic(includesZero: false))
+        // Readings on both sides of a dropped short gap rejoin one piece, so smoothing runs across it.
+        var segments: [[PointSample]] = []
+        for point in split.segments.joined() {
+            if let last = segments.last?.last,
+               gaps.contains(where: { $0.start >= last.date && $0.end <= point.date && $0.duration > 0 }) {
+                segments.append([point])
+            } else if segments.isEmpty {
+                segments.append([point])
+            } else {
+                segments[segments.count - 1].append(point)
+            }
+        }
+        return (segments.map { ChartSmoothing.smoothed($0, span: smoothingSpan) }, gaps)
+    }
+
+    /// The y range of the drawn values with a tenth of their spread above and below, so a ride between 210 and 260 m
+    /// fills the chart instead of sitting on a zero baseline.
+    private func yDomain(_ segments: [[PointSample]]) -> ClosedRange<Double> {
+        let values = segments.joined().map(\.value)
+        guard let low = values.min(), let high = values.max() else { return 0...1 }
+        let pad = high > low ? (high - low) * 0.1 : max(abs(high) * 0.05, 1)
+        return (low - pad)...(high + pad)
+    }
+
+    private var chart: some View {
+        let layout = layout
+        let yRange = yDomain(layout.segments)
+        return Chart {
+            ForEach(layout.gaps.indices, id: \.self) { index in
+                let gap = layout.gaps[index]
+                RectangleMark(xStart: .value("Gap start", gap.start), xEnd: .value("Gap end", gap.end))
+                    .foregroundStyle(Color.secondary.opacity(0.14))
+                    .annotation(position: .overlay, alignment: .center) {
+                        // Only wide gaps have room for the label.
+                        if span > 0, gap.duration / span > 0.12 {
+                            Text("No data")
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+            }
+            ForEach(layout.segments.indices, id: \.self) { segment in
+                ForEach(layout.segments[segment], id: \.date) { point in
+                    // The area starts at the bottom of the scaled range, not at zero.
+                    AreaMark(x: .value("Time", point.date), yStart: .value(label, yRange.lowerBound),
+                             yEnd: .value(label, point.value), series: .value("Segment", segment))
+                        .foregroundStyle(LinearGradient(colors: [tint.opacity(0.32), tint.opacity(0)],
+                                                        startPoint: .top, endPoint: .bottom))
+                        .interpolationMethod(.monotone)
+                    LineMark(x: .value("Time", point.date), y: .value(label, point.value),
+                             series: .value("Segment", segment))
+                        .foregroundStyle(tint)
+                        .lineStyle(StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                        .interpolationMethod(.monotone)
+                    if layout.segments[segment].count == 1 {
+                        PointMark(x: .value("Time", point.date), y: .value(label, point.value))
+                            .foregroundStyle(tint)
+                            .symbolSize(20)
+                    }
+                }
+            }
+        }
+        .chartYScale(domain: yRange)
+        .chartXScale(domain: (domain?.start ?? points.map(\.date).min()!)...(domain?.end ?? points.map(\.date).max()!))
         .chartXAxis {
             AxisMarks(values: .automatic(desiredCount: 4)) { _ in
-                AxisValueLabel(format: .dateTime.hour().minute())
+                AxisValueLabel(format: spansDays ? .dateTime.day().month(.abbreviated) : .dateTime.hour().minute())
                     .font(.caption2)
             }
         }

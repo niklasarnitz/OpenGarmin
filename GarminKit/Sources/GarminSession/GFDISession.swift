@@ -203,10 +203,10 @@ final class GFDISession {
             await receiveCreateFileStatus(message)
         case let message as GFDIFindMyPhoneRequest:
             await send(message.acknowledgement())
-            output(.event(.findMyPhone(started: true)))
+            output(.event(.findMyPhone(started: true, seconds: Int(message.duration))))
         case let message as GFDIFindMyPhoneCancel:
             await send(message.acknowledgement())
-            output(.event(.findMyPhone(started: false)))
+            output(.event(.findMyPhone(started: false, seconds: 0)))
         case let message as GFDIWeatherRequest:
             await send(message.acknowledgement())
             Task { [weak self] in

@@ -19,15 +19,16 @@ public struct DailySummary: Sendable, Codable, Hashable, Identifiable {
     public var id: Date { day }
 }
 
-/// The history on disk: the samples of the retention period (a year for stress and Body Battery), every imported activity, one summary per day, the keys
+/// The history on disk: the samples of the retention period (90 days, except 30 days for heart rate, SpO2 and respiration), every imported activity, one summary per day, the keys
 /// of the files already imported, and the raw FIT files. Only the import stage (`FITImporter`) owns and writes it, so
 /// it never runs on the main actor. Layout under `directory`: `history.json`, `Inbox/` (files waiting for import) and
-/// `FIT/` (imported files).
+/// `FIT/` (imported files) and `Batches/` (batches without a FIT file, as JSON, for the backend upload).
 struct HistoryStore {
     /// Samples older than this are dropped from the history. Activities and their records are kept.
     static let retention: TimeInterval = 30 * 24 * 3600
-    /// Stress and Body Battery are kept a year: Apple Health has no type for them, so the history is their only home.
-    static let dailyRetention: TimeInterval = 365 * 24 * 3600
+    /// Everything but the dense per-minute streams (heart rate, SpO2, respiration) is kept three months on the phone.
+    /// The backend keeps all data forever; Insights asks it for anything older.
+    static let dailyRetention: TimeInterval = 90 * 24 * 3600
 
     struct Snapshot: Codable {
         var history = HealthBatch()
@@ -84,6 +85,7 @@ struct HistoryStore {
     // MARK: - Files
 
     var inboxDirectory: URL { directory.appendingPathComponent("Inbox", isDirectory: true) }
+    private var batchesDirectory: URL { directory.appendingPathComponent("Batches", isDirectory: true) }
     private var fitDirectory: URL { directory.appendingPathComponent("FIT", isDirectory: true) }
 
     func inboxFile(for fileKey: String) -> URL {
@@ -105,6 +107,13 @@ struct HistoryStore {
             .sorted { $0.key < $1.key }
     }
 
+    /// Keeps a batch that has no FIT file, so the backend upload can send it. Written before the history commit, so an
+    /// imported batch is always kept.
+    func saveBatch(_ batch: HealthBatch, fileKey: String) throws {
+        try FileManager.default.createDirectory(at: batchesDirectory, withIntermediateDirectories: true)
+        try JSONEncoder().encode(batch).write(to: batchesDirectory.appendingPathComponent(fileKey + ".json"), options: .atomic)
+    }
+
     /// Moves an inbox file into `FIT/`, where imported files are kept.
     func archiveFile(_ url: URL, fileKey: String) throws {
         try FileManager.default.createDirectory(at: fitDirectory, withIntermediateDirectories: true)
@@ -124,19 +133,19 @@ struct HistoryStore {
     static func merged(_ base: HealthBatch, with new: HealthBatch, cutoff: Date, dailyCutoff: Date) -> HealthBatch {
         var out = HealthBatch()
         out.heartRate = union(base.heartRate, new.heartRate).filter { $0.date >= cutoff }
-        out.restingHeartRate = union(base.restingHeartRate, new.restingHeartRate).filter { $0.date >= cutoff }
-        out.steps = union(base.steps, new.steps).filter { $0.end >= cutoff }
-        out.activeEnergyKcal = union(base.activeEnergyKcal, new.activeEnergyKcal).filter { $0.end >= cutoff }
-        out.restingEnergyKcal = union(base.restingEnergyKcal, new.restingEnergyKcal).filter { $0.end >= cutoff }
-        out.distance = union(base.distance, new.distance).filter { $0.end >= cutoff }
-        out.floorsClimbed = union(base.floorsClimbed, new.floorsClimbed).filter { $0.end >= cutoff }
-        out.intensityMinutes = union(base.intensityMinutes, new.intensityMinutes).filter { $0.end >= cutoff }
+        out.restingHeartRate = union(base.restingHeartRate, new.restingHeartRate).filter { $0.date >= dailyCutoff }
+        out.steps = union(base.steps, new.steps).filter { $0.end >= dailyCutoff }
+        out.activeEnergyKcal = union(base.activeEnergyKcal, new.activeEnergyKcal).filter { $0.end >= dailyCutoff }
+        out.restingEnergyKcal = union(base.restingEnergyKcal, new.restingEnergyKcal).filter { $0.end >= dailyCutoff }
+        out.distance = union(base.distance, new.distance).filter { $0.end >= dailyCutoff }
+        out.floorsClimbed = union(base.floorsClimbed, new.floorsClimbed).filter { $0.end >= dailyCutoff }
+        out.intensityMinutes = union(base.intensityMinutes, new.intensityMinutes).filter { $0.end >= dailyCutoff }
         out.stress = union(base.stress, new.stress).filter { $0.date >= dailyCutoff }
         out.bodyBattery = union(base.bodyBattery, new.bodyBattery).filter { $0.date >= dailyCutoff }
         out.spo2 = union(base.spo2, new.spo2).filter { $0.date >= cutoff }
         out.respirationRate = union(base.respirationRate, new.respirationRate).filter { $0.date >= cutoff }
-        out.hrv = union(base.hrv, new.hrv).filter { $0.date >= cutoff }
-        out.sleep = union(base.sleep, new.sleep).filter { $0.end >= cutoff }
+        out.hrv = union(base.hrv, new.hrv).filter { $0.date >= dailyCutoff }
+        out.sleep = union(base.sleep, new.sleep).filter { $0.end >= dailyCutoff }
         let replaced = Set(new.activities.map(\.id))
         out.activities = base.activities.filter { !replaced.contains($0.id) } + union([], new.activities)
         return out

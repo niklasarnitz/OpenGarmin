@@ -22,13 +22,15 @@ struct ActivityDetailView: View {
                 if activity.records.contains(where: { $0.heartRate != nil }) {
                     MetricTile("Heart rate", symbol: "heart.fill", tint: Palette.ember) {
                         SeriesChart(points: series { $0.heartRate.map(Double.init) },
-                                    tint: Palette.ember, label: "bpm", height: 150)
+                                    tint: Palette.ember, label: "bpm", height: 150, zeroMeansNoData: true,
+                                    domain: DateInterval(start: activity.start, end: activity.end))
                     }
                 }
                 if activity.records.contains(where: { $0.speed != nil }) {
                     MetricTile("Speed", symbol: "speedometer", tint: activity.sport.tint) {
                         SeriesChart(points: series { $0.speed.map { $0 * 3.6 } },
-                                    tint: activity.sport.tint, label: "km/h", height: 130)
+                                    tint: activity.sport.tint, label: "km/h", height: 130, zeroMeansNoData: true,
+                                    domain: DateInterval(start: activity.start, end: activity.end))
                     }
                 }
                 if activity.records.contains(where: { $0.altitude != nil }) {

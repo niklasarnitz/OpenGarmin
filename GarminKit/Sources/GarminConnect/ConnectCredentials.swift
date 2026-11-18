@@ -31,4 +31,6 @@ struct ConnectCredentials: Codable, Sendable, Equatable {
     var consumer: ConnectConsumer
     var oauth1: ConnectOAuth1Token
     var access: ConnectAccessToken
+    /// The account's display name, which the per-user endpoints take in their path. Read once after the sign-in.
+    var displayName: String? = nil
 }

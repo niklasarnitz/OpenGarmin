@@ -174,6 +174,12 @@ public final class AGPSCache {
     /// The hosts Garmin serves AGPS from, as Gadgetbridge's AgpsInterceptor matches them.
     static let hosts: Set<String> = ["api.gcs.garmin.com", "api.gcs.garmin.cn"]
 
+    /// Where a data type is downloaded from until the user or the watch's first request sets another URL. Garmin's endpoint answers
+    /// only with a `constellations` query; there is no known public URL for the other types.
+    static let defaultURLs: [AGPSDataType: URL] = [
+        .constellations: URL(string: "https://api.gcs.garmin.com/ephemeris/cpe/sony/lle?coverage=WEEKS_1&constellations=GPS,GLONASS,GALILEO,QZSS")!,
+    ]
+
     public private(set) var entries: [AGPSEntry] = []
     public private(set) var isRefreshing = false
 
@@ -209,7 +215,7 @@ public final class AGPSCache {
         isRefreshing = true
         defer { isRefreshing = false }
         for type in AGPSDataType.allCases {
-            guard let url = records[type.rawValue]?.url else { continue }
+            guard let url = url(of: type) else { continue }
             if !force, isFresh(type) { continue }
             do {
                 let (data, response) = try await URLSession.shared.data(from: url)
@@ -277,6 +283,11 @@ public final class AGPSCache {
         return valid ? AGPSServedFile(type: type, data: data) : nil
     }
 
+    /// The URL set by the user or the watch's first request, else the default.
+    private func url(of type: AGPSDataType) -> URL? {
+        records[type.rawValue]?.url ?? Self.defaultURLs[type]
+    }
+
     private func isFresh(_ type: AGPSDataType) -> Bool {
         guard let updated = records[type.rawValue]?.updatedAt else { return false }
         return Date.now.timeIntervalSince(updated) < Self.refreshInterval
@@ -290,7 +301,7 @@ public final class AGPSCache {
     private func rebuildEntries() {
         entries = AGPSDataType.allCases.map { type in
             let record = records[type.rawValue]
-            return AGPSEntry(type: type, url: record?.url, status: status(of: type), updatedAt: record?.updatedAt)
+            return AGPSEntry(type: type, url: url(of: type), status: status(of: type), updatedAt: record?.updatedAt)
         }
     }
 

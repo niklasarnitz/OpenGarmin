@@ -36,6 +36,7 @@ struct DeviceView: View {
                 installs
                 safety
                 connectImport
+                backend
                 features
                 notifications(watch)
                 satelliteData
@@ -80,6 +81,7 @@ struct DeviceView: View {
                     .padding(.top, 6)
             }
         }
+        .frame(maxWidth: .infinity)
         .tile()
     }
 
@@ -153,6 +155,17 @@ struct DeviceView: View {
                 } label: {
                     Label("Import history from Garmin Connect", systemImage: "arrow.down.circle")
                 }
+            }
+        }
+    }
+
+    /// The self-hosted backend that keeps every raw file and all health data.
+    private var backend: some View {
+        MetricTile("Backend", symbol: "server.rack", tint: Palette.glacier) {
+            NavigationLink {
+                BackendView()
+            } label: {
+                Label("Upload to your own server", systemImage: "icloud.and.arrow.up")
             }
         }
     }

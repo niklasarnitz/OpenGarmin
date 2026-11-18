@@ -196,19 +196,18 @@ final class ConnectImportModel {
         }
     }
 
-    /// Activities first, newest first, then the stress and Body Battery of each day up to yesterday. Today is left out
-    /// because Body Battery is still changing; a day that was imported is skipped on the next run. `days` 0 imports
-    /// every activity of the account, and the last year of stress and Body Battery, which is what the history keeps.
+    /// Activities first, newest first, then the stress and Body Battery of each day, newest first, up to yesterday. Today
+    /// is left out because Body Battery is still changing; a day that was imported is skipped on the next run. `days` 0
+    /// imports every activity of the account and the stress and Body Battery back to its first day: the walk goes past
+    /// the earliest activity until 30 days in a row have no data.
     private func runImport(days: Int) async throws -> String {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: .now)
-        let dates = (0..<(days == 0 ? 365 : days)).reversed().compactMap { calendar.date(byAdding: .day, value: -$0, to: today) }
-        guard let first = dates.first else { return "" }
+        let first = days == 0 ? nil : calendar.date(byAdding: .day, value: -(days - 1), to: today)
         // Activities stored under the watch's unit number replace the watch's copy of the same activity in the history.
         let unit = watch.pairedWatch?.info?.unitNumber ?? 0
 
-        let activities = try await listActivities(from: days == 0 ? nil : first, to: days == 0 ? nil : today,
-                                                  calendar: calendar)
+        let activities = try await listActivities(from: first, to: days == 0 ? nil : today, calendar: calendar)
         var importedActivities = 0
         for (index, activity) in activities.enumerated() {
             progress = "Activity \(index + 1) of \(activities.count)"
@@ -219,17 +218,31 @@ final class ConnectImportModel {
             importedActivities += 1
         }
 
+        let earliestActivity = activities.map { calendar.startOfDay(for: $0.start) }.min()
         var importedDays = 0
-        for (index, date) in dates.enumerated() where date != today {
-            progress = "Stress and Body Battery, day \(index + 1) of \(dates.count)"
-            let key = "connect-daily-\(Int(date.timeIntervalSince1970))"
-            if await watch.hasImported(key) { continue }
-            let batch = try await client.dailyBatch(day: date, calendar: calendar)
-            if batch.isEmpty { continue }
-            try await watch.importBatch(batch, key: key)
-            importedDays += 1
+        var emptyDays = 0
+        var day = calendar.date(byAdding: .day, value: -1, to: today)
+        while let current = day {
+            let finished = if let first { current < first } else { emptyDays >= 30 && current < (earliestActivity ?? .distantFuture) }
+            if finished { break }
+            progress = "Daily data, \(current.formatted(date: .abbreviated, time: .omitted))"
+            let parts = calendar.dateComponents([.year, .month, .day], from: current)
+            let key = String(format: "connect-daily-v3-%04ld-%02ld-%02ld", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+            if await watch.hasImported(key) {
+                emptyDays = 0
+            } else {
+                let batch = try await client.dailyBatch(day: current, calendar: calendar)
+                if batch.isEmpty {
+                    emptyDays += 1
+                } else {
+                    try await watch.importBatch(batch, key: key)
+                    importedDays += 1
+                    emptyDays = 0
+                }
+            }
+            day = calendar.date(byAdding: .day, value: -1, to: current)
         }
-        return "Imported \(importedActivities) activities and \(importedDays) days of stress and Body Battery."
+        return "Imported \(importedActivities) activities and \(importedDays) days of daily data."
     }
 
     /// Every activity between two calendar days, in pages of 100.

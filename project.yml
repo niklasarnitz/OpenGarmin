@@ -44,7 +44,7 @@ targets:
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
-        UIBackgroundModes: [bluetooth-central, fetch, processing]
+        UIBackgroundModes: [audio, bluetooth-central, fetch, processing]
         BGTaskSchedulerPermittedIdentifiers: [com.niklasarnitz.opengarmin.sync]
         NSBluetoothAlwaysUsageDescription: OpenGarmin connects to your Garmin watch over Bluetooth to sync health data, send notifications and keep it up to date.
         NSHealthShareUsageDescription: OpenGarmin reads your profile (age, height, weight) to configure your watch.

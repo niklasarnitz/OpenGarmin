@@ -94,14 +94,47 @@ public actor GarminConnectClient {
         return try ZipArchive.entries(archive).first { $0.name.lowercased().hasSuffix(".fit") }?.data
     }
 
-    /// Stress and Body Battery of one calendar day, as a batch that holds only those two.
+    /// One calendar day of Garmin's daily data as a batch: stress and Body Battery, the sleep that ends on the day, the
+    /// steps, the resting heart rate and the HRV of that night. A part Garmin has no data for is left out.
     public func dailyBatch(day: Date, calendar: Calendar = .current) async throws -> HealthBatch {
-        let path = ConnectRequests.dailyStressPath(ConnectRequests.day(day, calendar: calendar))
-        let (stress, bodyBattery) = try ConnectParsing.dailyStress(await get(path, query: []))
+        let date = ConnectRequests.day(day, calendar: calendar)
+        let dayItem = [URLQueryItem(name: "date", value: date)]
+        let name = try await displayName()
         var batch = HealthBatch()
+        let (stress, bodyBattery) = try ConnectParsing.dailyStress(await get(ConnectRequests.dailyStressPath(date), query: []))
         batch.stress = stress
         batch.bodyBattery = bodyBattery
+        let sleep = try await dayData(ConnectRequests.dailySleepPath(name),
+                                      query: dayItem + [URLQueryItem(name: "nonSleepBufferMinutes", value: "60")])
+        batch.sleep = ConnectParsing.sleep(sleep).map { [$0] } ?? []
+        batch.steps = ConnectParsing.steps(try await dayData(ConnectRequests.stepsChartPath(name), query: dayItem))
+        let summary = try await dayData(ConnectRequests.dailySummaryPath(name),
+                                        query: [URLQueryItem(name: "calendarDate", value: date)])
+        batch.restingHeartRate = ConnectParsing.restingHeartRate(summary).map { [PointSample(date: calendar.startOfDay(for: day), value: $0)] } ?? []
+        batch.hrv = ConnectParsing.hrv(try await dayData(ConnectRequests.hrvPath(date), query: [])).map { [$0] } ?? []
         return batch
+    }
+
+    /// The display name of the account, read once and kept with the credentials.
+    private func displayName() async throws -> String {
+        if let name = credentials?.displayName { return name }
+        let name = try ConnectParsing.displayName(await get(ConnectRequests.socialProfilePath, query: []))
+        // Read the credentials again: the call above may have renewed the access token.
+        guard var saved = credentials else { throw GarminConnectError.notSignedIn }
+        saved.displayName = name
+        try ConnectKeychain.save(saved)
+        credentials = saved
+        return name
+    }
+
+    /// The body of a per-day endpoint. Garmin answers a day without data with 404, which reads as an empty body, so the
+    /// parsers return nothing for it.
+    private func dayData(_ path: String, query: [URLQueryItem]) async throws -> Data {
+        do {
+            return try await get(path, query: query)
+        } catch GarminConnectError.http(404) {
+            return Data()
+        }
     }
 
     // MARK: - Tokens

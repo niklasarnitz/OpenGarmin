@@ -631,6 +631,16 @@
         }
       }
     },
+    "Custom range" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eigener Zeitraum"
+          }
+        }
+      }
+    },
     "Daily totals, runs and rides with routes, laps and metrics." : {
       "localizations" : {
         "de" : {
@@ -881,6 +891,16 @@
         }
       }
     },
+    "From" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Von"
+          }
+        }
+      }
+    },
     "GPS satellite data" : {
       "localizations" : {
         "de" : {
@@ -981,6 +1001,16 @@
         }
       }
     },
+    "Here I am!" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hier bin ich!"
+          }
+        }
+      }
+    },
     "Hike" : {
       "localizations" : {
         "de" : {
@@ -1051,6 +1081,16 @@
         }
       }
     },
+    "Last month" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Letzter Monat"
+          }
+        }
+      }
+    },
     "Last night" : {
       "localizations" : {
         "de" : {
@@ -1077,6 +1117,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Letzte Aktualisierung"
+          }
+        }
+      }
+    },
+    "Last week" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Letzte Woche"
           }
         }
       }
@@ -1191,6 +1241,266 @@
         }
       }
     },
+    "Backend" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backend"
+          }
+        }
+      }
+    },
+    "Server URL" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server-Adresse"
+          }
+        }
+      }
+    },
+    "Email" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "E-Mail"
+          }
+        }
+      }
+    },
+    "Password" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passwort"
+          }
+        }
+      }
+    },
+    "Sign in" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anmelden"
+          }
+        }
+      }
+    },
+    "Create account" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konto anlegen"
+          }
+        }
+      }
+    },
+    "Sign out" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abmelden"
+          }
+        }
+      }
+    },
+    "Status" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Status"
+          }
+        }
+      }
+    },
+    "Account" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konto"
+          }
+        }
+      }
+    },
+    "Last upload" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Letzter Upload"
+          }
+        }
+      }
+    },
+    "Pending" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ausstehend"
+          }
+        }
+      }
+    },
+    "Uploading…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird hochgeladen…"
+          }
+        }
+      }
+    },
+    "Upload now" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jetzt hochladen"
+          }
+        }
+      }
+    },
+    "Upload to your own server" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf den eigenen Server hochladen"
+          }
+        }
+      }
+    },
+    "Sign in to your backend account. The password is not stored; the session token is kept in the Keychain." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Melde dich bei deinem Backend-Konto an. Das Passwort wird nicht gespeichert; das Sitzungs-Token liegt im Schlüsselbund."
+          }
+        }
+      }
+    },
+    "Uploaded after every import. Only what the server lacks is sent, and a failed upload is retried at the next import." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nach jedem Import hochgeladen. Es wird nur gesendet, was der Server noch nicht hat; ein fehlgeschlagener Upload wird beim nächsten Import wiederholt."
+          }
+        }
+      }
+    },
+    "Skipped" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Übersprungen"
+          }
+        }
+      }
+    },
+    "The server refused these files. They are tried again after an app update or on Upload now." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Server hat diese Dateien abgelehnt. Sie werden nach einem App-Update oder bei „Jetzt hochladen“ erneut versucht."
+          }
+        }
+      }
+    },
+    "Apple Health" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Health"
+          }
+        }
+      }
+    },
+    "Uploads every Health type from every source, month by month. Nothing is written to Health. Parts the server has are skipped, so an interrupted upload picks up where it stopped." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lädt jeden Health-Datentyp aus jeder Quelle, Monat für Monat, hoch. Es wird nichts in Health geschrieben. Teile, die der Server schon hat, werden übersprungen, daher setzt ein unterbrochener Upload dort fort, wo er stoppte."
+          }
+        }
+      }
+    },
+    "Uploaded" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hochgeladen"
+          }
+        }
+      }
+    },
+    "Completed" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abgeschlossen"
+          }
+        }
+      }
+    },
+    "Upload all Apple Health data" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Apple-Health-Daten hochladen"
+          }
+        }
+      }
+    },
+    "Upload again" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erneut hochladen"
+          }
+        }
+      }
+    },
+    "Sign in to the backend first." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zuerst am Backend anmelden."
+          }
+        }
+      }
+    },
+    "Health data is not available on this device." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Health-Daten sind auf diesem Gerät nicht verfügbar."
+          }
+        }
+      }
+    },
     "Never" : {
       "localizations" : {
         "de" : {
@@ -1217,6 +1527,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Noch keine Aktivitäten"
+          }
+        }
+      }
+    },
+    "No data" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Daten"
           }
         }
       }
@@ -1367,6 +1687,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenGarmin öffnen"
+          }
+        }
+      }
+    },
+    "Open OpenGarmin to stop the sound." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffne OpenGarmin, um den Ton zu stoppen."
           }
         }
       }
@@ -1911,6 +2241,16 @@
         }
       }
     },
+    "Stop" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stopp"
+          }
+        }
+      }
+    },
     "Strength" : {
       "localizations" : {
         "de" : {
@@ -1991,6 +2331,16 @@
         }
       }
     },
+    "The phone keeps the last three months. Older data comes from your backend." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das iPhone speichert die letzten drei Monate. Ältere Daten kommen von deinem Backend."
+          }
+        }
+      }
+    },
     "The watch shows events from now until this far ahead." : {
       "localizations" : {
         "de" : {
@@ -2001,12 +2351,42 @@
         }
       }
     },
+    "This month" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Monat"
+          }
+        }
+      }
+    },
+    "This year" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Jahr"
+          }
+        }
+      }
+    },
     "Time" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zeit"
+          }
+        }
+      }
+    },
+    "To" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bis"
           }
         }
       }
@@ -2191,6 +2571,26 @@
         }
       }
     },
+    "Your watch is looking for this phone." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Uhr sucht dieses iPhone."
+          }
+        }
+      }
+    },
+    "Your watch is looking for your phone" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Uhr sucht dein iPhone"
+          }
+        }
+      }
+    },
     "Your watch sends data to the iPhone. Apple Health keeps the history." : {
       "localizations" : {
         "de" : {
@@ -2257,6 +2657,676 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "von 100"
+          }
+        }
+      }
+    },
+    "Stress by context" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stress nach Kontext"
+          }
+        }
+      }
+    },
+    "Working hours" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arbeitszeit"
+          }
+        }
+      }
+    },
+    "After hours" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nach Feierabend"
+          }
+        }
+      }
+    },
+    "Weekends" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wochenende"
+          }
+        }
+      }
+    },
+    "Selected range" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gewählter Zeitraum"
+          }
+        }
+      }
+    },
+    "%lld readings" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld Messwerte"
+          }
+        }
+      }
+    },
+    "No readings" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Messwerte"
+          }
+        }
+      }
+    },
+    "What stands out" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auffällig"
+          }
+        }
+      }
+    },
+    "No stress readings in this range yet." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch keine Stressmesswerte in diesem Zeitraum."
+          }
+        }
+      }
+    },
+    "Working hours are %@ points higher than after hours." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Arbeitszeit liegt %@ Punkte über dem Wert nach Feierabend."
+          }
+        }
+      }
+    },
+    "Working hours are %@ points lower than after hours." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Arbeitszeit liegt %@ Punkte unter dem Wert nach Feierabend."
+          }
+        }
+      }
+    },
+    "Working hours and after hours are about the same." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arbeitszeit und Zeit nach Feierabend liegen etwa gleichauf."
+          }
+        }
+      }
+    },
+    "Stress while asleep is %@ points higher than after hours." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stress im Schlaf liegt %@ Punkte über dem Wert nach Feierabend."
+          }
+        }
+      }
+    },
+    "Stress while asleep is %@ points lower than after hours." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stress im Schlaf liegt %@ Punkte unter dem Wert nach Feierabend."
+          }
+        }
+      }
+    },
+    "Stress while asleep is about the same as after hours." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stress im Schlaf liegt etwa auf dem Niveau nach Feierabend."
+          }
+        }
+      }
+    },
+    "About this" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hintergrund"
+          }
+        }
+      }
+    },
+    "Each stress reading is filed under one context. Sleep comes first: readings inside a night's sleep count as asleep. Weekends are awake time on Saturday and Sunday outside working hours. Readings of 0 were not measured and are left out." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jeder Stressmesswert gehört zu genau einem Kontext. Schlaf hat Vorrang: Messwerte innerhalb der Nachtschlafphase zählen als Schlaf. Wochenende sind wache Zeiten an Samstag und Sonntag außerhalb der Arbeitszeit. Messwerte von 0 wurden nicht gemessen und fehlen in der Auswertung."
+          }
+        }
+      }
+    },
+    "Working days" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arbeitstage"
+          }
+        }
+      }
+    },
+    "End must be after the start. Until then, no reading counts as working time." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Ende muss nach dem Beginn liegen. Bis dahin zählt kein Messwert als Arbeitszeit."
+          }
+        }
+      }
+    },
+    "Compared with your usual" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im Vergleich zu deinem Üblichen"
+          }
+        }
+      }
+    },
+    "Better than your usual." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Besser als sonst."
+          }
+        }
+      }
+    },
+    "In line with your usual." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im üblichen Bereich."
+          }
+        }
+      }
+    },
+    "Worse than your usual." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schlechter als sonst."
+          }
+        }
+      }
+    },
+    "Not enough data yet to compare with your usual." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch nicht genug Daten für einen Vergleich mit deinem Üblichen."
+          }
+        }
+      }
+    },
+    "Garmin needs %lld days of data to tell what is usual for you. So far there are %lld." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Garmin braucht %lld Tage Daten, um zu erkennen, was für dich üblich ist. Bisher sind es %lld."
+          }
+        }
+      }
+    },
+    "7-day average" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durchschnitt 7 Tage"
+          }
+        }
+      }
+    },
+    "30-day average" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durchschnitt 30 Tage"
+          }
+        }
+      }
+    },
+    "Usual range" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Üblicher Bereich"
+          }
+        }
+      }
+    },
+    "Balanced range" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ausgeglichener Bereich"
+          }
+        }
+      }
+    },
+    "Your 7-day average is higher than your 30-day average." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein 7-Tage-Durchschnitt liegt über dem 30-Tage-Durchschnitt."
+          }
+        }
+      }
+    },
+    "Your 7-day average is lower than your 30-day average." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein 7-Tage-Durchschnitt liegt unter dem 30-Tage-Durchschnitt."
+          }
+        }
+      }
+    },
+    "Your 7-day average is close to your 30-day average." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein 7-Tage-Durchschnitt liegt nahe am 30-Tage-Durchschnitt."
+          }
+        }
+      }
+    },
+    "The latest value is above your usual range." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der letzte Wert liegt über deinem üblichen Bereich."
+          }
+        }
+      }
+    },
+    "The latest value is below your usual range." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der letzte Wert liegt unter deinem üblichen Bereich."
+          }
+        }
+      }
+    },
+    "The latest value is within your usual range." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der letzte Wert liegt im üblichen Bereich."
+          }
+        }
+      }
+    },
+    "What moves it" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Was ihn beeinflusst"
+          }
+        }
+      }
+    },
+    "Raises" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erhöht"
+          }
+        }
+      }
+    },
+    "Lowers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Senkt"
+          }
+        }
+      }
+    },
+    "Short sleep last night" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenig Schlaf letzte Nacht"
+          }
+        }
+      }
+    },
+    "Heavy training this week" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viel Training diese Woche"
+          }
+        }
+      }
+    },
+    "Few steps this week" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenig Schritte diese Woche"
+          }
+        }
+      }
+    },
+    "Higher stress this week" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mehr Stress diese Woche"
+          }
+        }
+      }
+    },
+    "Suggestions" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorschläge"
+          }
+        }
+      }
+    },
+    "These are general ideas, not medical advice." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das sind allgemeine Anregungen, keine medizinische Beratung."
+          }
+        }
+      }
+    },
+    "Wear the watch for a few more days so a personal baseline can form." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trage die Uhr noch einige Tage, damit sich ein persönlicher Richtwert bilden kann."
+          }
+        }
+      }
+    },
+    "This is better than your usual. Keep doing what you are doing." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das liegt besser als sonst. Mach weiter so."
+          }
+        }
+      }
+    },
+    "Try an earlier bedtime or a calmer evening. Sleep is the easiest lever for recovery." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Versuch früher ins Bett zu gehen oder den Abend ruhiger zu gestalten. Schlaf ist der einfachste Hebel für die Erholung."
+          }
+        }
+      }
+    },
+    "Plan one or two lighter days. Your recent load is high compared with your usual." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plane ein bis zwei leichtere Tage ein. Deine letzte Belastung ist im Vergleich zu sonst hoch."
+          }
+        }
+      }
+    },
+    "Your load is below your usual. Build back gradually rather than all at once." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Belastung liegt unter dem Üblichen. Steigere dich langsam statt auf einmal."
+          }
+        }
+      }
+    },
+    "Your steps were low this week. A short walk each day adds up." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Schritte waren diese Woche niedrig. Ein kurzer Spaziergang am Tag summiert sich."
+          }
+        }
+      }
+    },
+    "Short breaks, a walk or some slow breathing can bring stress down during the day." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kurze Pausen, ein Spaziergang oder langsames Atmen können den Stress im Tagesverlauf senken."
+          }
+        }
+      }
+    },
+    "If this stays clearly off for several weeks, or you feel unwell, talk to a doctor. This is not a diagnosis." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn dieser Wert über mehrere Wochen deutlich abweicht oder du dich nicht wohlfühlst, sprich mit einer Ärztin oder einem Arzt. Das ist keine Diagnose."
+          }
+        }
+      }
+    },
+    "Trend" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verlauf"
+          }
+        }
+      }
+    },
+    "Day by day" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tag für Tag"
+          }
+        }
+      }
+    },
+    "No values in this range." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Werte in diesem Zeitraum."
+          }
+        }
+      }
+    },
+    "About this metric" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zu dieser Größe"
+          }
+        }
+      }
+    },
+    "Training status" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trainingsstatus"
+          }
+        }
+      }
+    },
+    "HRV status" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HRV-Status"
+          }
+        }
+      }
+    },
+    "Sleep score" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schlafwert"
+          }
+        }
+      }
+    },
+    "Garmin estimates stress from your heart rate variability and heart rate during the day. 0 to 25 is rest, 26 to 50 low, 51 to 75 medium and 76 to 100 high. A reading of 0 means the watch could not measure." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Garmin schätzt den Stress aus deiner Herzfrequenzvariabilität und deinem Puls im Tagesverlauf. 0 bis 25 ist Ruhe, 26 bis 50 niedrig, 51 bis 75 mittel und 76 bis 100 hoch. Ein Wert von 0 bedeutet, dass die Uhr nicht messen konnte."
+          }
+        }
+      }
+    },
+    "Body Battery is a 0 to 100 estimate of your energy. It is built from heart rate variability, stress and sleep. It charges while you rest and sleep, and drains with activity and stress." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Body Battery ist eine Schätzung deiner Energie von 0 bis 100. Sie setzt sich aus Herzfrequenzvariabilität, Stress und Schlaf zusammen. Sie lädt sich beim Ruhen und Schlafen auf und sinkt mit Aktivität und Stress."
+          }
+        }
+      }
+    },
+    "Training status compares the load of the last seven days with your average over four weeks. The load of each activity comes from its duration and training effect, or from its heart rate." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Trainingsstatus vergleicht die Belastung der letzten sieben Tage mit deinem Durchschnitt der letzten vier Wochen. Die Belastung jeder Aktivität ergibt sich aus Dauer und Trainingseffekt oder aus der Herzfrequenz."
+          }
+        }
+      }
+    },
+    "Heart rate variability (HRV) is the variation in time between heartbeats, measured overnight. Garmin compares your last seven nights with your own balanced range." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Herzfrequenzvariabilität (HRV) ist die Schwankung der Zeit zwischen Herzschlägen, nachts gemessen. Garmin vergleicht deine letzten sieben Nächte mit deinem persönlichen ausgeglichenen Bereich."
+          }
+        }
+      }
+    },
+    "Your heart rate at complete rest, usually measured in the early morning. A lower value than usual often means good recovery and fitness. A sustained rise can mean stress, poor sleep or illness." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Herzfrequenz in völliger Ruhe, meist am frühen Morgen gemessen. Ein niedrigerer Wert als sonst deutet oft auf gute Erholung und Fitness hin. Ein anhaltender Anstieg kann auf Stress, schlechten Schlaf oder Krankheit hinweisen."
+          }
+        }
+      }
+    },
+    "The time you spent asleep in the sleep sessions the watch recorded." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Zeit, die du in den von der Uhr aufgezeichneten Schlafphasen geschlafen hast."
+          }
+        }
+      }
+    },
+    "Garmin's 0 to 100 sleep score combines the duration, quality, recovery and interruptions of the night." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Garmins Schlafwert von 0 bis 100 fasst Dauer, Qualität, Erholung und Unterbrechungen der Nacht zusammen."
+          }
+        }
+      }
+    },
+    "The steps the watch counted during each day." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Schritte, die die Uhr an jedem Tag gezählt hat."
           }
         }
       }

@@ -92,6 +92,66 @@ import GarminModels
         let (stress, battery) = try ConnectParsing.dailyStress(Data("null".utf8))
         #expect(stress.isEmpty && battery.isEmpty)
     }
+
+    @Test func sleepReadsTheNightStagesAndScore() throws {
+        // Levels 0 deep, 1 light. The DTO's totals (30 min awake, 10 min REM) match code 2's 30 minutes and code 3's 10,
+        // so 2 is awake and 3 is REM. Code 7 is unknown and a level that ends before it starts is dropped.
+        let data = Data(#"""
+        {"dailySleepDTO":{"sleepStartTimestampGMT":1761113400000,"sleepEndTimestampGMT":1761125400000,
+          "remSleepSeconds":600,"awakeSleepSeconds":1800,
+          "sleepScores":{"overall":{"value":84},"totalDuration":{"value":90},"deepPercentage":{"value":70},
+            "lightPercentage":{"value":55},"remPercentage":{"value":80},"awakeCount":{"value":65},"restlessness":{"value":40},
+            "stress":{"value":30}}},
+         "sleepLevels":[{"startGMT":"2025-10-22T06:10:00.0","endGMT":"2025-10-22T06:40:00.0","activityLevel":0.0},
+           {"startGMT":"2025-10-22T06:40:00.0","endGMT":"2025-10-22T07:00:00.0","activityLevel":1},
+           {"startGMT":"2025-10-22T07:00:00.0","endGMT":"2025-10-22T07:30:00.0","activityLevel":2},
+           {"startGMT":"2025-10-22T07:30:00.0","endGMT":"2025-10-22T07:40:00.0","activityLevel":3},
+           {"startGMT":"2025-10-22T07:40:00.0","endGMT":"2025-10-22T07:50:00.0","activityLevel":7},
+           {"startGMT":"2025-10-22T07:50:00.0","endGMT":"2025-10-22T07:45:00.0","activityLevel":1}]}
+        """#.utf8)
+        let session = try #require(ConnectParsing.sleep(data))
+        #expect(session.start == Date(timeIntervalSince1970: 1_761_113_400))
+        #expect(session.end == Date(timeIntervalSince1970: 1_761_125_400))
+        #expect(session.intervals == [
+            SleepInterval(start: Date(timeIntervalSince1970: 1_761_113_400), end: Date(timeIntervalSince1970: 1_761_115_200), stage: .deep),
+            SleepInterval(start: Date(timeIntervalSince1970: 1_761_115_200), end: Date(timeIntervalSince1970: 1_761_116_400), stage: .light),
+            SleepInterval(start: Date(timeIntervalSince1970: 1_761_116_400), end: Date(timeIntervalSince1970: 1_761_118_200), stage: .awake),
+            SleepInterval(start: Date(timeIntervalSince1970: 1_761_118_200), end: Date(timeIntervalSince1970: 1_761_118_800), stage: .rem),
+        ])
+        #expect(session.score == 84)
+        #expect(session.scoreBreakdown == SleepScoreBreakdown(duration: 90, deep: 70, light: 55, rem: 80, awakenings: 65, restlessness: 40))
+    }
+
+    @Test func remAndAwakeCodesFollowTheNightsTotals() {
+        // 80 minutes of code 2 and 25 of code 3 against 78 REM and 27 awake: 2 is REM.
+        #expect(ConnectParsing.codeTwoIsREM(minutes: [2: 80, 3: 25], remMinutes: 78, awakeMinutes: 27))
+        #expect(!ConnectParsing.codeTwoIsREM(minutes: [2: 80, 3: 25], remMinutes: 27, awakeMinutes: 78))
+        // Without totals, the default seen on real accounts: 2 is awake.
+        #expect(!ConnectParsing.codeTwoIsREM(minutes: [2: 80, 3: 25], remMinutes: nil, awakeMinutes: nil))
+    }
+
+    @Test func aDayWithoutSleepIsNoSession() {
+        #expect(ConnectParsing.sleep(Data("null".utf8)) == nil)
+        #expect(ConnectParsing.sleep(Data(#"{"dailySleepDTO":{"sleepStartTimestampGMT":5,"sleepEndTimestampGMT":5}}"#.utf8)) == nil)
+    }
+
+    @Test func stepsKeepTheIntervalsWithSteps() {
+        let data = Data(#"[{"startGMT":"2026-04-20T22:00:00.0","endGMT":"2026-04-20T22:15:00.0","steps":120},{"startGMT":"2026-04-20T22:15:00.0","endGMT":"2026-04-20T22:30:00.0","steps":0},{"startGMT":"2026-04-20T22:30:00.0","endGMT":"2026-04-20T22:45:00.0","steps":null}]"#.utf8)
+        #expect(ConnectParsing.steps(data) == [IntervalSample(start: Date(timeIntervalSince1970: 1_776_722_400), end: Date(timeIntervalSince1970: 1_776_723_300), value: 120)])
+        #expect(ConnectParsing.steps(Data("null".utf8)).isEmpty)
+    }
+
+    @Test func restingHeartRateAndHRVOfTheDay() {
+        #expect(ConnectParsing.restingHeartRate(Data(#"{"restingHeartRate":54}"#.utf8)) == 54)
+        #expect(ConnectParsing.restingHeartRate(Data(#"{"restingHeartRate":null}"#.utf8)) == nil)
+        let hrv = Data(#"{"hrvSummary":{"weeklyAvg":48,"lastNightAvg":52.0},"sleepEndTimestampGMT":"2026-04-21T06:00:00.0"}"#.utf8)
+        #expect(ConnectParsing.hrv(hrv) == PointSample(date: Date(timeIntervalSince1970: 1_776_751_200), value: 52))
+        #expect(ConnectParsing.hrv(Data()) == nil)
+    }
+
+    @Test func displayNameIsTheSocialProfilesName() throws {
+        #expect(try ConnectParsing.displayName(Data(#"{"displayName":"abc-123","fullName":"Max"}"#.utf8)) == "abc-123")
+    }
 }
 
 @Suite struct ZipArchiveTests {

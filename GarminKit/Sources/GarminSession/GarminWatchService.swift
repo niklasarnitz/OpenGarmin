@@ -43,8 +43,8 @@ public final class GarminWatchService: WatchService {
     public private(set) var battery: BatteryStatus?
     public private(set) var nearby: [NearbyWatch] = []
     public private(set) var installedApps: [InstalledApp] = []
-    /// The retained history: every imported activity, stress and Body Battery of the last year, and
-    /// the other samples of the last 30 days.
+    /// The retained history: every imported activity, 90 days of daily data (steps, sleep, stress,
+    /// Body Battery, resting heart rate, HRV), and 30 days of heart rate, SpO2 and respiration.
     public private(set) var latest: HealthBatch
     public private(set) var fileProgress: FileTransferProgress?
     public let events: AsyncStream<WatchEvent>
@@ -168,6 +168,7 @@ public final class GarminWatchService: WatchService {
     // MARK: - Commands
 
     public func syncNow() async {
+        Task { await agps.refresh() }
         await session?.requestSync()
     }
 
@@ -420,6 +421,9 @@ public final class GarminWatchService: WatchService {
                 setPairedWatch(watch)
             }
             state = importing ? Self.savingState : .connected
+            // Keeps the satellite orbits current for the watch's next request; files fresher than four hours stay.
+            Task { await agps.refresh() }
+            eventSink.yield(.syncFinished)
         case let .live(reading):
             for subscriber in liveSubscribers.values where subscriber.metrics.contains(reading.metric) {
                 subscriber.sink.yield(reading)
