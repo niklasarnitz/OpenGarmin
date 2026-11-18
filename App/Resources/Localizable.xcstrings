@@ -1001,6 +1001,16 @@
         }
       }
     },
+    "Here I am!" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hier bin ich!"
+          }
+        }
+      }
+    },
     "Hike" : {
       "localizations" : {
         "de" : {
@@ -1681,6 +1691,16 @@
         }
       }
     },
+    "Open OpenGarmin to stop the sound." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffne OpenGarmin, um den Ton zu stoppen."
+          }
+        }
+      }
+    },
     "Open Settings" : {
       "localizations" : {
         "de" : {
@@ -2221,6 +2241,16 @@
         }
       }
     },
+    "Stop" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stopp"
+          }
+        }
+      }
+    },
     "Strength" : {
       "localizations" : {
         "de" : {
@@ -2537,6 +2567,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dein Profil"
+          }
+        }
+      }
+    },
+    "Your watch is looking for this phone." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Uhr sucht dieses iPhone."
+          }
+        }
+      }
+    },
+    "Your watch is looking for your phone" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Uhr sucht dein iPhone"
           }
         }
       }

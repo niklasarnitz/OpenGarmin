@@ -26,12 +26,21 @@ struct OpenGarminApp: App {
 /// First launch goes through onboarding; afterwards the app opens on its tabs.
 struct RootView: View {
     @AppStorage("onboardingComplete") private var onboardingComplete = false
+    @Environment(AppEnvironment.self) private var app
 
     var body: some View {
-        if onboardingComplete {
-            MainTabView()
-        } else {
-            OnboardingView { onboardingComplete = true }
+        Group {
+            if onboardingComplete {
+                MainTabView()
+            } else {
+                OnboardingView { onboardingComplete = true }
+            }
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { app.findMyPhone.isRinging },
+            set: { if !$0 { app.findMyPhone.stop() } }
+        )) {
+            FindMyPhoneView(alert: app.findMyPhone)
         }
     }
 }

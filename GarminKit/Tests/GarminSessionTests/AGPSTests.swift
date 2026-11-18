@@ -95,7 +95,7 @@ private func makeCache() -> AGPSCache {
 @MainActor
 @Test func cacheStoresOnlyValidFilesAndReportsTheirStatus() throws {
     let cache = makeCache()
-    #expect(cache.entries.allSatisfy { $0.status == .missing && $0.url == nil })
+    #expect(cache.entries.allSatisfy { $0.status == .missing })
 
     #expect(throws: AGPSError.self) { try cache.install(Data([9, 9, 9]), for: .constellations) }
     #expect(cache.entries.allSatisfy { $0.status == .missing && $0.updatedAt == nil })
@@ -135,4 +135,18 @@ private func makeCache() -> AGPSCache {
     try cache.install(completeAGPSTar(), for: .constellations)
     _ = cache.servedFile(for: "https://api.gcs.garmin.com/ephemeris/v2/tar?constellations=GPS")
     #expect(cache.entries.first { $0.type == .constellations }?.url == URL(string: "https://mirror.example/agps.tar"))
+}
+
+@Test @MainActor func newCacheDownloadsOrbitsFromGarminUntilAnotherURLIsSet() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let cache = AGPSCache(directory: directory)
+    let orbits = try #require(cache.entries.first { $0.type == .constellations }?.url)
+    #expect(orbits.host == "api.gcs.garmin.com")
+    #expect(orbits.query?.contains("constellations=GPS,GLONASS,GALILEO,QZSS") == true)
+    #expect(cache.entries.first { $0.type == .rxNetworks }?.url == nil)
+
+    let custom = URL(string: "https://example.com/orbits.tar")!
+    cache.setURL(custom, for: .constellations)
+    #expect(AGPSCache(directory: directory).entries.first { $0.type == .constellations }?.url == custom)
 }

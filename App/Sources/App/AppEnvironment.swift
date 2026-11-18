@@ -11,6 +11,8 @@ final class AppEnvironment {
     let watch: any WatchService
     /// Uploads the watch's files and the Garmin Connect batches to the self-hosted backend.
     let backend: BackendSync
+    /// Rings the phone while the watch runs Find my phone.
+    let findMyPhone = FindMyPhoneAlert()
 
     init(watch: any WatchService, backend: BackendSync) {
         self.watch = watch
@@ -53,11 +55,18 @@ final class AppEnvironment {
         let watch = self.watch
         let writer = HealthKitWriter()
         let backend = self.backend
+        let findMyPhone = self.findMyPhone
         Task {
             for await event in watch.events {
-                if case let .findMyPhone(started) = event {
-                    FindMyPhoneAlert.update(started: started)
+                switch event {
+                case let .findMyPhone(started, seconds):
+                    findMyPhone.update(started: started, seconds: seconds)
                     continue
+                case .syncFinished:
+                    // Uploads after every sync, also one that brought nothing new, so earlier leftovers go out.
+                    backend.requestUpload()
+                    continue
+                default: break
                 }
                 guard case let .healthBatchImported(batch) = event else { continue }
                 backend.requestUpload()

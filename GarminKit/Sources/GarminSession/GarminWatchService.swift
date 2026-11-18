@@ -168,6 +168,7 @@ public final class GarminWatchService: WatchService {
     // MARK: - Commands
 
     public func syncNow() async {
+        Task { await agps.refresh() }
         await session?.requestSync()
     }
 
@@ -420,6 +421,9 @@ public final class GarminWatchService: WatchService {
                 setPairedWatch(watch)
             }
             state = importing ? Self.savingState : .connected
+            // Keeps the satellite orbits current for the watch's next request; files fresher than four hours stay.
+            Task { await agps.refresh() }
+            eventSink.yield(.syncFinished)
         case let .live(reading):
             for subscriber in liveSubscribers.values where subscriber.metrics.contains(reading.metric) {
                 subscriber.sink.yield(reading)
