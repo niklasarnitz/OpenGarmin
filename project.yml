@@ -1,0 +1,56 @@
+name: OpenGarmin
+options:
+  bundleIdPrefix: com.niklasarnitz
+  deploymentTarget:
+    iOS: "27.0"
+  createIntermediateGroups: true
+packages:
+  GarminKit:
+    path: GarminKit
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+targets:
+  OpenGarmin:
+    type: application
+    platform: iOS
+    sources:
+      - path: App/Sources
+      - path: App/Resources
+    dependencies:
+      - package: GarminKit
+        product: GarminKit
+    entitlements:
+      path: App/OpenGarmin.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+        com.apple.developer.healthkit.background-delivery: true
+        com.apple.developer.weatherkit: true
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: OpenGarmin
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UIBackgroundModes: [bluetooth-central, fetch, processing]
+        BGTaskSchedulerPermittedIdentifiers: [com.niklasarnitz.opengarmin.sync]
+        NSBluetoothAlwaysUsageDescription: OpenGarmin connects to your Garmin watch over Bluetooth to sync health data, send notifications and keep it up to date.
+        NSHealthShareUsageDescription: OpenGarmin reads your profile (age, height, weight) to configure your watch.
+        NSHealthUpdateUsageDescription: OpenGarmin saves heart rate, sleep, steps, workouts and more from your Garmin watch to Apple Health.
+        NSLocationWhenInUseUsageDescription: Your location is used to send local weather and GPS satellite data to your watch.
+        NSLocationAlwaysAndWhenInUseUsageDescription: Your location is used to keep weather on your watch current in the background.
+        NSCalendarsFullAccessUsageDescription: Upcoming calendar events are shown on your watch.
+        NSContactsUsageDescription: Emergency contacts can be shared with your watch for incident detection.
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.niklasarnitz.opengarmin
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: "1"

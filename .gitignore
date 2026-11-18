@@ -1,0 +1,7 @@
+vendor/
+.build*/
+.amp/in/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.DS_Store
