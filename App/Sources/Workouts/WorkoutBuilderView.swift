@@ -5,7 +5,7 @@ struct WorkoutBuilderView: View {
     let onSave: (WorkoutPlan) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var name = "New workout"
+    @State private var name = String(localized: "New workout")
     @State private var sport: Sport = .running
     @State private var steps: [WorkoutStep] = []
     @State private var isAddingStep = false
@@ -23,13 +23,19 @@ struct WorkoutBuilderView: View {
                         }
                     }
                 }
-                Section("Steps") {
+                Section {
                     ForEach(steps) { step in
                         StepRow(step: step)
                     }
                     .onDelete { steps.remove(atOffsets: $0) }
                     .onMove { steps.move(fromOffsets: $0, toOffset: $1) }
                     Button("Add step", systemImage: "plus") { isAddingStep = true }
+                } header: {
+                    Text("Steps")
+                } footer: {
+                    if steps.isEmpty {
+                        Text("A workout needs at least one step.")
+                    }
                 }
             }
             .navigationTitle("New workout")
@@ -37,6 +43,10 @@ struct WorkoutBuilderView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", role: .cancel) { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    EditButton()
+                        .disabled(steps.isEmpty)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
@@ -59,7 +69,7 @@ struct StepEditor: View {
     let onAdd: (WorkoutStep) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var name = "Interval"
+    @State private var name = String(localized: "Interval")
     @State private var intensity: WorkoutIntensity = .active
     @State private var ending: Ending = .time
     @State private var minutes = 5
@@ -71,14 +81,31 @@ struct StepEditor: View {
     @State private var fastestPace = 300
     @State private var slowestPace = 330
 
-    enum Ending: String, CaseIterable, Identifiable {
-        case time = "Time", distance = "Distance", open = "Open", repeatSteps = "Repeat"
+    enum Ending: CaseIterable, Identifiable {
+        case time, distance, open, repeatSteps
         var id: Self { self }
+
+        var title: LocalizedStringKey {
+            switch self {
+            case .time: "Time"
+            case .distance: "Distance"
+            case .open: "Open"
+            case .repeatSteps: "Repeat"
+            }
+        }
     }
 
-    enum TargetKind: String, CaseIterable, Identifiable {
-        case off = "None", heartRateZone = "Heart rate zone", pace = "Pace"
+    enum TargetKind: CaseIterable, Identifiable {
+        case off, heartRateZone, pace
         var id: Self { self }
+
+        var title: LocalizedStringKey {
+            switch self {
+            case .off: "None"
+            case .heartRateZone: "Heart rate zone"
+            case .pace: "Pace"
+            }
+        }
     }
 
     var body: some View {
@@ -92,9 +119,8 @@ struct StepEditor: View {
                 }
                 Section("Ends by") {
                     Picker("Ends by", selection: $ending) {
-                        ForEach(Ending.allCases) { Text($0.rawValue).tag($0) }
+                        ForEach(Ending.allCases) { Text($0.title).tag($0) }
                     }
-                    .pickerStyle(.segmented)
                     switch ending {
                     case .time:
                         Stepper("\(minutes) min", value: $minutes, in: 1...180)
@@ -111,7 +137,7 @@ struct StepEditor: View {
                 if ending != .repeatSteps {
                     Section("Target") {
                         Picker("Target", selection: $targetKind) {
-                            ForEach(TargetKind.allCases) { Text($0.rawValue).tag($0) }
+                            ForEach(TargetKind.allCases) { Text($0.title).tag($0) }
                         }
                         switch targetKind {
                         case .off:
@@ -165,12 +191,12 @@ struct StepEditor: View {
 extension WorkoutIntensity {
     var title: String {
         switch self {
-        case .active: "Active"
-        case .rest: "Rest"
-        case .warmup: "Warm up"
-        case .cooldown: "Cool down"
-        case .recovery: "Recovery"
-        case .interval: "Interval"
+        case .active: String(localized: "Active")
+        case .rest: String(localized: "Rest")
+        case .warmup: String(localized: "Warm up")
+        case .cooldown: String(localized: "Cool down")
+        case .recovery: String(localized: "Recovery")
+        case .interval: String(localized: "Interval")
         }
     }
 
@@ -189,11 +215,12 @@ extension WorkoutStep {
     var summary: String {
         let ending: String
         switch duration {
-        case .time(let seconds): ending = "\(seconds / 60) min"
-        case .distance(let meters): ending = "\(meters) m"
-        case .open: ending = "Open"
-        case .repeatUntilStepsComplete(let from, let count): ending = "Repeat \(count) times from step \(from + 1)"
-        default: ending = "Custom"
+        case .time(let seconds): ending = String(localized: "\(seconds / 60) min")
+        case .distance(let meters): ending = String(localized: "\(meters) m")
+        case .open: ending = String(localized: "Open")
+        case .repeatUntilStepsComplete(let from, let count):
+            ending = String(localized: "Repeat \(count) times from step \(from + 1)")
+        default: ending = String(localized: "Custom")
         }
         switch target {
         case .none: return ending

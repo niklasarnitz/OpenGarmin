@@ -63,6 +63,7 @@ struct ActivityDetailView: View {
         .mapStyle(.standard(elevation: .realistic))
         .frame(height: 300)
         .clipShape(.rect(cornerRadius: 28, style: .continuous))
+        .accessibilityLabel("Route map")
     }
 
     private var region: MKCoordinateRegion {
@@ -99,13 +100,14 @@ struct ActivityDetailView: View {
         if activity.sport.usesPace {
             return (Formatting.pace(secondsPerKilometre: 1000 / metresPerSecond), "/km")
         }
-        return (String(format: "%.1f", metresPerSecond * 3.6), "km/h")
+        return ((metresPerSecond * 3.6).formatted(.number.precision(.fractionLength(1))), "km/h")
     }
 
-    private func stat(_ title: String, value: String, unit: String?, symbol: String) -> some View {
+    private func stat(_ title: LocalizedStringKey, value: String, unit: String?, symbol: String) -> some View {
         MetricTile(title, symbol: symbol, tint: activity.sport.tint) {
             MetricFigure(value: value, unit: unit, size: 34)
         }
+        .accessibilityElement(children: .combine)
     }
 
     private var laps: some View {
@@ -126,6 +128,9 @@ struct ActivityDetailView: View {
                     }
                 }
                 .font(.subheadline)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .accessibilityElement(children: .combine)
             }
         }
     }

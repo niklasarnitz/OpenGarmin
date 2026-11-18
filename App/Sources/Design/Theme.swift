@@ -51,11 +51,11 @@ enum Formatting {
         let total = Int(seconds.rounded())
         let hours = total / 3600
         let minutes = total % 3600 / 60
-        return hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
+        return hours > 0 ? String(localized: "\(hours)h \(minutes)m") : String(localized: "\(minutes)m")
     }
 
     static func distance(_ meters: Double) -> String {
-        String(format: "%.1f", meters / 1000)
+        (meters / 1000).formatted(.number.precision(.fractionLength(1)))
     }
 
     /// Seconds per kilometre as m:ss.
@@ -73,33 +73,33 @@ enum Formatting {
     }
 
     static func lastSeen(_ date: Date?) -> String {
-        guard let date else { return "Never" }
+        guard let date else { return String(localized: "Never") }
         return date.formatted(.relative(presentation: .named))
     }
 
     /// "garmin_fenix_8_pro" -> "Fenix 8 Pro"
     static func deviceName(_ catalogID: String?) -> String {
-        guard let catalogID else { return "Garmin watch" }
+        guard let catalogID else { return String(localized: "Garmin watch") }
         return catalogID.replacing("garmin_", with: "").split(separator: "_").map(\.capitalized).joined(separator: " ")
     }
 
     static func capability(_ capability: GarminCapability) -> String {
         switch capability {
-        case .sync: "Sync"
-        case .deviceInitiatesSync: "Watch-initiated sync"
-        case .gncs: "Notifications"
-        case .findMyPhone: "Find my phone"
-        case .findMyWatch: "Find my watch"
-        case .connectiqHttp: "Connect IQ apps"
-        case .weatherConditions: "Weather"
-        case .weatherAlerts: "Weather alerts"
-        case .livetrack: "Live track"
-        case .workoutDownload: "Workouts"
-        case .courseDownload: "Courses"
-        case .gpsEphemerisDownload: "GPS satellite data"
-        case .realtimeSettings: "Live settings"
-        case .incidentDetection: "Incident detection"
-        default: "Feature \(capability.rawValue)"
+        case .sync: String(localized: "Sync")
+        case .deviceInitiatesSync: String(localized: "Watch-initiated sync")
+        case .gncs: String(localized: "Notifications")
+        case .findMyPhone: String(localized: "Find my phone")
+        case .findMyWatch: String(localized: "Find my watch")
+        case .connectiqHttp: String(localized: "Connect IQ apps")
+        case .weatherConditions: String(localized: "Weather")
+        case .weatherAlerts: String(localized: "Weather alerts")
+        case .livetrack: String(localized: "Live track")
+        case .workoutDownload: String(localized: "Workouts")
+        case .courseDownload: String(localized: "Courses")
+        case .gpsEphemerisDownload: String(localized: "GPS satellite data")
+        case .realtimeSettings: String(localized: "Live settings")
+        case .incidentDetection: String(localized: "Incident detection")
+        default: String(localized: "Feature \(capability.rawValue)")
         }
     }
 }
@@ -107,20 +107,20 @@ enum Formatting {
 extension Sport {
     var title: String {
         switch self {
-        case .running: "Run"
-        case .cycling: "Ride"
-        case .eBiking: "E-bike ride"
-        case .swimming: "Swim"
-        case .walking: "Walk"
-        case .hiking: "Hike"
-        case .training: "Strength"
-        case .fitnessEquipment: "Cardio"
-        case .hiit: "HIIT"
-        case .rowing: "Row"
-        case .meditation: "Meditation"
-        case .alpineSkiing: "Alpine ski"
-        case .multisport: "Multisport"
-        default: "Activity"
+        case .running: String(localized: "Run")
+        case .cycling: String(localized: "Ride")
+        case .eBiking: String(localized: "E-bike ride")
+        case .swimming: String(localized: "Swim")
+        case .walking: String(localized: "Walk")
+        case .hiking: String(localized: "Hike")
+        case .training: String(localized: "Strength")
+        case .fitnessEquipment: String(localized: "Cardio")
+        case .hiit: String(localized: "HIIT")
+        case .rowing: String(localized: "Row")
+        case .meditation: String(localized: "Meditation")
+        case .alpineSkiing: String(localized: "Alpine ski")
+        case .multisport: String(localized: "Multisport")
+        default: String(localized: "Activity")
         }
     }
 

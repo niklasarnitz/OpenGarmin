@@ -136,7 +136,9 @@ struct DeviceView: View {
     /// iPhone notifications reach the watch through iOS (ANCS), which needs the bonded link and the system setting below.
     private func notifications(_ watch: PairedWatch) -> some View {
         MetricTile("Notifications", symbol: "bell.badge.fill", tint: Palette.blaze) {
-            LabeledContent("Bonded", value: Self.isLinked(app.watch.state) ? "Connected" : "Not confirmed")
+            LabeledContent("Bonded") {
+                Text(Self.isLinked(app.watch.state) ? "Connected" : "Not confirmed")
+            }
             Text("iOS does not tell apps whether the watch is bonded. OpenGarmin counts it as bonded while the watch is connected, because the connection asks iOS to pair.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -203,9 +205,9 @@ struct DeviceView: View {
 
     private static func agpsStatusText(_ status: AGPSStatus) -> String {
         switch status {
-        case .missing: "Missing"
-        case .current: "Current"
-        case .expired: "Expired"
+        case .missing: String(localized: "Missing")
+        case .current: String(localized: "Current")
+        case .expired: String(localized: "Expired")
         case let .failed(message): message
         }
     }

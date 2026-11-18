@@ -15,11 +15,11 @@ extension SleepStage {
 
     var title: String {
         switch self {
-        case .awake: "Awake"
-        case .rem: "REM"
-        case .light: "Light"
-        case .deep: "Deep"
-        case .unmeasurable: "Unmeasured"
+        case .awake: String(localized: "Awake")
+        case .rem: String(localized: "REM")
+        case .light: String(localized: "Light")
+        case .deep: String(localized: "Deep")
+        case .unmeasurable: String(localized: "Unmeasured")
         }
     }
 
@@ -52,11 +52,12 @@ struct SleepDetailView: View {
                     MetricTile("Asleep", symbol: "moon.zzz.fill", tint: Palette.dusk) {
                         MetricFigure(value: Formatting.duration(asleep), size: 36)
                     }
+                    .accessibilityElement(children: .combine)
                     MetricTile("Score", symbol: "star.fill", tint: Palette.amber) {
                         MetricFigure(value: session.score.map(String.init) ?? "–", size: 36)
                     }
+                    .accessibilityElement(children: .combine)
                 }
-                .frame(height: 150)
 
                 MetricTile("Hypnogram", symbol: "chart.bar.xaxis", tint: Palette.dusk) {
                     Chart(session.intervals, id: \.start) { interval in
@@ -76,6 +77,14 @@ struct SleepDetailView: View {
                         }
                     }
                     .frame(height: 220)
+                    .overlay {
+                        if session.intervals.isEmpty {
+                            Text("No stages recorded")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .accessibilityLabel("Hypnogram")
                 }
 
                 MetricTile("Stages", symbol: "square.stack.3d.up.fill", tint: Palette.glacier) {
@@ -90,6 +99,7 @@ struct SleepDetailView: View {
                                 .font(.figure(18, weight: .semibold))
                                 .foregroundStyle(.secondary)
                         }
+                        .accessibilityElement(children: .combine)
                     }
                 }
             }

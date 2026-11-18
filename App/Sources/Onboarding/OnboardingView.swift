@@ -21,9 +21,9 @@ struct OnboardingView: View {
     }
 
     private struct Feature: Identifiable {
-        var id: String { title }
-        let title: String
-        let detail: String
+        var id: String { symbol }
+        let title: LocalizedStringKey
+        let detail: LocalizedStringKey
         let symbol: String
         let tint: Color
     }
@@ -43,6 +43,7 @@ struct OnboardingView: View {
         VStack(spacing: 0) {
             progressBar
                 .padding(.bottom, 28)
+                .accessibilityHidden(true)
             page
                 .id(step)
                 .transition(.push(from: .trailing))
@@ -93,7 +94,7 @@ struct OnboardingView: View {
         }
     }
 
-    private var primaryTitle: String {
+    private var primaryTitle: LocalizedStringKey {
         switch step {
         case .welcome: "Get started"
         case .pair:
@@ -132,7 +133,7 @@ struct OnboardingView: View {
                     profileError = nil
                     go(1)
                 } catch {
-                    profileError = "Couldn't send the profile to the watch: \(error.localizedDescription) It is saved and goes to the watch when it next connects."
+                    profileError = String(localized: "Couldn't send the profile to the watch: \(error.localizedDescription) It is saved and goes to the watch when it next connects.")
                 }
             }
         default:
@@ -165,7 +166,7 @@ struct OnboardingView: View {
         }
     }
 
-    private func header(_ title: String, _ subtitle: String) -> some View {
+    private func header(_ title: LocalizedStringKey, _ subtitle: LocalizedStringKey) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.screenTitle)
@@ -253,6 +254,7 @@ struct OnboardingView: View {
                                     Task { await permissions.request(permission) }
                                 }
                                 .buttonStyle(.glass)
+                                .accessibilityLabel("Allow \(permission.title)")
                             }
                         }
                         .tile()
@@ -314,7 +316,7 @@ struct OnboardingView: View {
             header("Pair \(Formatting.deviceName(chosen?.catalogID))",
                    "iOS shows a pairing request. Confirm the code on the watch and on the phone.")
             if case .pairing(let hint) = app.watch.state {
-                Label(hint ?? "Waiting for confirmation", systemImage: "lock.circle.fill")
+                Label(hint ?? String(localized: "Waiting for confirmation"), systemImage: "lock.circle.fill")
                     .font(.headline)
                     .foregroundStyle(Palette.glacier)
             }

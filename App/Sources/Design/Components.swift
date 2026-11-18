@@ -5,12 +5,12 @@ import GarminSession
 
 /// A titled content surface with an icon. Every dashboard and detail screen is built from these.
 struct MetricTile<Content: View>: View {
-    let title: String
+    let title: LocalizedStringKey
     let symbol: String
     let tint: Color
     let content: Content
 
-    init(_ title: String, symbol: String, tint: Color, @ViewBuilder content: () -> Content) {
+    init(_ title: LocalizedStringKey, symbol: String, tint: Color, @ViewBuilder content: () -> Content) {
         self.title = title
         self.symbol = symbol
         self.tint = tint
@@ -32,15 +32,23 @@ struct MetricTile<Content: View>: View {
     }
 }
 
+/// A big rounded number. The size follows Dynamic Type and shrinks rather than clipping when it gets too wide.
 struct MetricFigure: View {
     let value: String
     var unit: String?
-    var size: CGFloat = 44
+    var size: CGFloat
+    @ScaledMetric(relativeTo: .title) private var scale: CGFloat = 1
+
+    init(value: String, unit: String? = nil, size: CGFloat = 44) {
+        self.value = value
+        self.unit = unit
+        self.size = size
+    }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 3) {
             Text(value)
-                .font(.figure(size))
+                .font(.figure(size * scale))
                 .monospacedDigit()
                 .contentTransition(.numericText())
             if let unit {
@@ -49,6 +57,8 @@ struct MetricFigure: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .lineLimit(1)
+        .minimumScaleFactor(0.5)
     }
 }
 
@@ -68,6 +78,7 @@ struct RingGauge: View {
                 .rotationEffect(.degrees(-90))
         }
         .animation(.smooth(duration: 1.1), value: progress)
+        .accessibilityHidden(true)
     }
 }
 
@@ -91,20 +102,21 @@ struct WatchStatusPill: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .glassEffect(.regular, in: .capsule)
+        .accessibilityElement(children: .combine)
     }
 }
 
 extension WatchConnectionState {
     var label: String {
         switch self {
-        case .noWatchPaired: "No watch"
-        case .searching: "Searching"
-        case .connecting: "Connecting"
-        case .pairing: "Pairing"
-        case .connected: "Connected"
-        case .syncing(let progress, _): "Syncing \(Int(progress * 100))%"
-        case .disconnected: "Offline"
-        case .failed: "Error"
+        case .noWatchPaired: String(localized: "No watch")
+        case .searching: String(localized: "Searching")
+        case .connecting: String(localized: "Connecting")
+        case .pairing: String(localized: "Pairing")
+        case .connected: String(localized: "Connected")
+        case .syncing(let progress, _): String(localized: "Syncing \(Int(progress * 100))%")
+        case .disconnected: String(localized: "Offline")
+        case .failed: String(localized: "Error")
         }
     }
 
@@ -132,6 +144,17 @@ struct SeriesChart: View {
     var showsAxis = true
 
     var body: some View {
+        if points.isEmpty {
+            Text("No samples yet")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, minHeight: height)
+        } else {
+            chart
+        }
+    }
+
+    private var chart: some View {
         Chart(points, id: \.date) { point in
             AreaMark(x: .value("Time", point.date), y: .value(label, point.value))
                 .foregroundStyle(LinearGradient(colors: [tint.opacity(0.32), tint.opacity(0)],
@@ -151,14 +174,15 @@ struct SeriesChart: View {
         }
         .chartYAxis(showsAxis ? .automatic : .hidden)
         .frame(height: height)
+        .accessibilityLabel(Text(label))
     }
 }
 
 /// Shown in place of content that has not synced yet.
 struct EmptyDataCard: View {
-    let title: String
+    let title: LocalizedStringKey
     let symbol: String
-    let message: String
+    let message: LocalizedStringKey
 
     var body: some View {
         ContentUnavailableView {

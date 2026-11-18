@@ -44,34 +44,34 @@ struct TodayView: View {
     }
 
     private var hero: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             ring(title: "Steps", symbol: "figure.walk", value: Formatting.whole(steps),
                  caption: "of 10,000", progress: steps / 10_000, tint: Palette.blaze)
             ring(title: "Body battery", symbol: "battery.75percent",
                  value: data.bodyBattery.latest.map(Formatting.whole) ?? "–",
                  caption: "of 100", progress: (data.bodyBattery.latest ?? 0) / 100, tint: Palette.lichen)
         }
-        .frame(height: 230)
     }
 
-    private func ring(title: String, symbol: String, value: String, caption: String,
+    private func ring(title: LocalizedStringKey, symbol: String, value: String, caption: LocalizedStringKey,
                       progress: Double, tint: Color) -> some View {
         MetricTile(title, symbol: symbol, tint: tint) {
             ZStack {
                 RingGauge(progress: progress, tint: tint, lineWidth: 14)
-                VStack(spacing: 0) {
-                    Text(value)
-                        .font(.figure(30))
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
+                VStack(spacing: 2) {
+                    MetricFigure(value: value, size: 30)
                     Text(caption)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                 }
+                .padding(.horizontal, 14)
             }
+            .aspectRatio(1, contentMode: .fit)
             .frame(maxWidth: .infinity)
-            .frame(height: 130)
         }
+        .accessibilityElement(children: .combine)
     }
 
     private var heartRate: some View {
@@ -80,6 +80,7 @@ struct TodayView: View {
             SeriesChart(points: data.heartRate.map { PointSample(date: $0.date, value: Double($0.bpm)) },
                         tint: Palette.ember, label: "Heart rate", height: 150)
         }
+        .accessibilityElement(children: .combine)
     }
 
     private var grid: some View {
@@ -90,7 +91,7 @@ struct TodayView: View {
                 } label: {
                     cell("Sleep", symbol: "bed.double.fill", tint: Palette.dusk,
                          value: Formatting.duration(sleep.end.timeIntervalSince(sleep.start)),
-                         caption: sleep.score.map { "Score \($0)" } ?? "Last night")
+                         caption: sleepCaption)
                 }
                 .buttonStyle(.plain)
             }
@@ -102,26 +103,34 @@ struct TodayView: View {
             cell("HRV", symbol: "waveform.path.ecg", tint: Palette.lichen,
                  value: data.hrv.latest.map { "\(Int($0)) ms" } ?? "–", caption: "Overnight average")
             cell("Respiration", symbol: "wind", tint: Palette.amber,
-                 value: data.respirationRate.latest.map { String(format: "%.1f", $0) } ?? "–",
+                 value: data.respirationRate.latest.map { $0.formatted(.number.precision(.fractionLength(1))) } ?? "–",
                  caption: "Breaths per minute")
             cell("Resting HR", symbol: "heart", tint: Palette.ember,
                  value: data.restingHeartRate.latest.map { "\(Int($0))" } ?? "–", caption: "bpm")
         }
     }
 
-    private func cell(_ title: String, symbol: String, tint: Color, value: String, caption: String) -> some View {
+    private var sleepCaption: LocalizedStringResource {
+        if let score = sleep?.score { return "Score \(score)" }
+        return "Last night"
+    }
+
+    private func cell(_ title: LocalizedStringKey, symbol: String, tint: Color, value: String,
+                      caption: LocalizedStringResource) -> some View {
         MetricTile(title, symbol: symbol, tint: tint) {
             MetricFigure(value: value, size: 34)
             Text(caption)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        .accessibilityElement(children: .combine)
     }
 
     private var stress: some View {
         MetricTile("Stress", symbol: "bolt.heart.fill", tint: Palette.amber) {
             SeriesChart(points: data.stress, tint: Palette.amber, label: "Stress", height: 120)
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
