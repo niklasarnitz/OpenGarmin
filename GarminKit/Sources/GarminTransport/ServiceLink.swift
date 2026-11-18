@@ -8,6 +8,15 @@ public protocol GarminServiceLink: GarminLink {
     func openFileTransfer() async throws -> any GarminServiceChannel
 }
 
+/// A link that can open realtime services: the watch streams health readings on them, as Gadgetbridge's realtime
+/// services do. They are unreliable, so readings arrive unframed and nothing is acknowledged.
+public protocol GarminRealtimeLink: GarminLink {
+    /// Opens a realtime service by its code, or returns the channel already open for it on this connection. The
+    /// channel is returned once the watch has accepted the registration. Sending `[1]` on it starts the stream and
+    /// `[0]` stops it.
+    func openRealtimeService(_ service: UInt16) async throws -> any GarminServiceChannel
+}
+
 /// One file transfer service the watch opened. `incoming` finishes when the watch closes the service or the link
 /// drops, so a finished stream does not by itself mean the transfer was complete.
 public protocol GarminServiceChannel: AnyObject, Sendable {

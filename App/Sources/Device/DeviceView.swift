@@ -34,6 +34,7 @@ struct DeviceView: View {
                     watchSettings(watch)
                 }
                 installs
+                safety
                 features
                 notifications(watch)
                 satelliteData
@@ -86,6 +87,11 @@ struct DeviceView: View {
             LabeledContent("Last sync", value: Formatting.lastSeen(watch.lastSync))
             LabeledContent("State", value: app.watch.state.label)
             SyncProgressView(state: app.watch.state, file: app.watch.fileProgress)
+            NavigationLink {
+                LiveView()
+            } label: {
+                Label("Live readings", systemImage: "waveform.path.ecg")
+            }
             HStack(spacing: 10) {
                 Button("Sync now", systemImage: "arrow.triangle.2.circlepath") {
                     Task { await app.watch.syncNow() }
@@ -142,6 +148,16 @@ struct DeviceView: View {
                 InstallView()
             } label: {
                 Label("Install apps and courses", systemImage: "square.and.arrow.down")
+            }
+        }
+    }
+
+    private var safety: some View {
+        MetricTile("Safety", symbol: "shield.lefthalf.filled", tint: Palette.ember) {
+            NavigationLink {
+                EmergencyContactsView()
+            } label: {
+                Label("Emergency contacts", systemImage: "person.2.fill")
             }
         }
     }

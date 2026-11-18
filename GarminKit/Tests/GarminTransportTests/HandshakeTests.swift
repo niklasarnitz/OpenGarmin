@@ -51,3 +51,9 @@ import Foundation
     // Its data packets carry only the low three bits: 0xB0 = MLR flag | handle 3 << 4.
     #expect(MLRPacket(decoding: Data([0xB0, 0x40, 0, 0, 0]))?.handle == UInt8(3))
 }
+
+@Test func realtimeRegistrationIsUnreliable() {
+    // REGISTER_ML for service 16 (accelerometer) with no MLR framing: client id 2, reliable flag 0.
+    #expect(Array(MLRControl.registerRequest(service: 16, reliable: false)) == [0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0])
+    #expect(Array(MLRControl.registerRequest(service: 16, reliable: true)) == [0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 16, 0, 2])
+}

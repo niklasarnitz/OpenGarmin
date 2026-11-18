@@ -47,6 +47,7 @@ public final class GarminWatchService: WatchService {
     public private(set) var latest: HealthBatch
     public private(set) var fileProgress: FileTransferProgress?
     public let events: AsyncStream<WatchEvent>
+    public private(set) var emergencyContacts: [EmergencyContact]
     /// The GPS satellite data the watch takes from the phone: its URLs, cached files and refresh.
     public let agps: AGPSCache
 
@@ -68,6 +69,8 @@ public final class GarminWatchService: WatchService {
     @ObservationIgnored private var reconnectAttempts = 0
     @ObservationIgnored private var scanner: GarminScanner?
     @ObservationIgnored private var scanTask: Task<Void, Never>?
+    /// The apps' live readings, by subscriber. The watch streams the union of their metrics.
+    @ObservationIgnored private var liveSubscribers: [UUID: (metrics: Set<LiveMetric>, sink: AsyncStream<LiveReading>.Continuation)] = [:]
 
     /// Shown after the watch's sync ends while the import stage still saves the files.
     private static let savingState = WatchConnectionState.syncing(progress: 1, detail: "Saving…")
@@ -94,6 +97,7 @@ public final class GarminWatchService: WatchService {
         latest = history.history
         let (importEvents, importSink) = AsyncStream.makeStream(of: FITImporter.Event.self)
         importer = FITImporter(history: history, report: { importSink.yield($0) })
+        emergencyContacts = store.emergencyContacts
         let paired = store.pairedWatch
         pairedWatch = paired
         state = paired == nil ? .noWatchPaired : .disconnected(lastSeen: paired?.lastSync)
@@ -252,6 +256,30 @@ public final class GarminWatchService: WatchService {
         try await session.installCourse(gpx: gpx, name: name, includeTurns: includeTurns, onProgress: progress)
     }
 
+    public func setEmergencyContacts(_ contacts: [EmergencyContact]) {
+        store.emergencyContacts = contacts
+        emergencyContacts = contacts
+    }
+
+    public func liveReadings(_ metrics: Set<LiveMetric>) -> AsyncStream<LiveReading> {
+        let id = UUID()
+        let (stream, sink) = AsyncStream.makeStream(of: LiveReading.self)
+        liveSubscribers[id] = (metrics, sink)
+        sink.onTermination = { [weak self] _ in
+            Task { @MainActor in
+                self?.liveSubscribers.removeValue(forKey: id)
+                self?.syncLive()
+            }
+        }
+        syncLive()
+        return stream
+    }
+
+    /// Tells the session which metrics the subscribers want.
+    private func syncLive() {
+        session?.setLive(liveSubscribers.values.reduce(into: Set<LiveMetric>()) { $0.formUnion($1.metrics) })
+    }
+
     // MARK: - Connection
 
     private func setPairedWatch(_ watch: PairedWatch?) {
@@ -303,7 +331,7 @@ public final class GarminWatchService: WatchService {
         let newSync = GarminDeviceCatalog.all.first(where: { $0.id == pairedWatch?.catalogID })?.usesNewSyncProtocol
         return GFDISession(link: link, importer: importer, capabilities: GFDISession.phoneCapabilities,
                            phoneName: phoneName, newSyncProtocol: newSync, weatherProvider: weatherProvider,
-                           agps: agps) { [weak self] output in
+                           agps: agps, contacts: { [weak self] in self?.emergencyContacts ?? [] }) { [weak self] output in
             guard let self, current == self.generation else { return }
             self.handle(output)
         }
@@ -344,6 +372,7 @@ public final class GarminWatchService: WatchService {
             state = .connected
             // Files a stopped import left in the inbox are imported on every connect, not only at launch.
             Task { await self.importer.start() }
+            syncLive()
             let session = session
             let profile = store.userProfile
             Task { [weak self] in
@@ -372,6 +401,10 @@ public final class GarminWatchService: WatchService {
                 setPairedWatch(watch)
             }
             state = importing ? Self.savingState : .connected
+        case let .live(reading):
+            for subscriber in liveSubscribers.values where subscriber.metrics.contains(reading.metric) {
+                subscriber.sink.yield(reading)
+            }
         case let .event(event):
             if case let .battery(status) = event { battery = status }
             eventSink.yield(event)

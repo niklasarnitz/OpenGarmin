@@ -12,7 +12,7 @@ public enum GarminLinkError: Error, Equatable {
 /// CoreBluetooth `GarminLink` for one watch. Uses multi-link reliable framing (V2) when the watch exposes its
 /// MLR characteristics, and plain COBS over V1 or V0 otherwise.
 @MainActor
-public final class BLEGarminLink: NSObject, GarminServiceLink {
+public final class BLEGarminLink: NSObject, GarminServiceLink, GarminRealtimeLink {
     public nonisolated let states: AsyncStream<LinkState>
     public nonisolated let incomingFrames: AsyncStream<Data>
     private let stateSink: AsyncStream<LinkState>.Continuation
@@ -41,6 +41,8 @@ public final class BLEGarminLink: NSObject, GarminServiceLink {
     /// Service codes in use, and the registrations still waiting for the watch's reply.
     private var openServices: Set<UInt16> = []
     private var openRequests: [UInt16: CheckedContinuation<UInt8, Error>] = [:]
+    /// Handles of the realtime services open on this connection, by service code.
+    private var realtimeHandles: [UInt16: UInt8] = [:]
     private var decoder = CobsDecoder()
 
     private var connectContinuation: CheckedContinuation<Void, Error>?
@@ -135,6 +137,7 @@ public final class BLEGarminLink: NSObject, GarminServiceLink {
         serviceSinks = [:]
         plainHandles = []
         openServices = []
+        realtimeHandles = [:]
         let waiting = Array(openRequests.values)
         openRequests = [:]
         waiting.forEach { $0.resume(throwing: GarminLinkError.notReady) }
@@ -297,6 +300,7 @@ public final class BLEGarminLink: NSObject, GarminServiceLink {
             ackTimers.removeValue(forKey: key)?.cancel()
             retransmitTimers.removeValue(forKey: key)?.cancel()
             openServices.remove(service)
+            realtimeHandles.removeValue(forKey: service)
             serviceSinks.removeValue(forKey: key)?.finish()
         default:
             break
@@ -350,6 +354,11 @@ public final class BLEGarminLink: NSObject, GarminServiceLink {
         print("[transport] \(message)")
     }
 
+    /// Sends a payload on an unreliable service: the handle byte, then the payload, in one write.
+    func sendUnreliable(_ payload: Data, on handle: UInt8) {
+        write(Data([handle]) + payload)
+    }
+
     /// Acknowledges the watch's packets after `MLRChannel.ackDelay`, unless an acknowledgement goes out first.
     private func startAckTimer(_ handle: UInt8) {
         ackTimers[handle]?.cancel()
@@ -395,7 +404,31 @@ public final class BLEGarminLink: NSObject, GarminServiceLink {
         }
         let (stream, sink) = AsyncStream.makeStream(of: Data.self)
         serviceSinks[handle] = sink
-        return BLEServiceChannel(link: self, handle: handle, incoming: stream)
+        return BLEServiceChannel(link: self, handle: handle, incoming: stream, reliable: true)
+    }
+
+    // MARK: - Realtime services
+
+    /// Opens an unreliable realtime service. The handle is registered once per connection: a later open of the same
+    /// service gets a new stream on the same handle, and the previous stream ends.
+    public func openRealtimeService(_ service: UInt16) async throws -> any GarminServiceChannel {
+        guard case .ready = state else { throw GarminLinkError.notReady }
+        let handle: UInt8
+        if let open = realtimeHandles[service] {
+            handle = open
+        } else {
+            guard !openServices.contains(service) else { throw GarminLinkError.failed("service \(service) is already opening") }
+            openServices.insert(service)
+            handle = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<UInt8, Error>) in
+                openRequests[service] = continuation
+                write(MLRControl.registerRequest(service: service, reliable: false))
+            }
+            realtimeHandles[service] = handle
+        }
+        serviceSinks.removeValue(forKey: handle)?.finish()
+        let (stream, sink) = AsyncStream.makeStream(of: Data.self)
+        serviceSinks[handle] = sink
+        return BLEServiceChannel(link: self, handle: handle, incoming: stream, reliable: false)
     }
 
     // MARK: - Called by GarminCentral
@@ -418,23 +451,29 @@ public final class BLEGarminLink: NSObject, GarminServiceLink {
     }
 }
 
-/// One file transfer service on a BLE link. Payloads go to the watch on its handle, and `incoming` finishes when the
-/// watch closes the handle or the link ends.
+/// One service channel on a BLE link. Payloads go to the watch on its handle, and `incoming` finishes when the watch
+/// closes the handle or the link ends. A reliable channel is a file transfer; an unreliable one is a realtime service.
 @MainActor
 public final class BLEServiceChannel: GarminServiceChannel {
     public nonisolated let incoming: AsyncStream<Data>
     private weak var link: BLEGarminLink?
     private let handle: UInt8
+    private let reliable: Bool
 
-    fileprivate init(link: BLEGarminLink, handle: UInt8, incoming: AsyncStream<Data>) {
+    fileprivate init(link: BLEGarminLink, handle: UInt8, incoming: AsyncStream<Data>, reliable: Bool) {
         self.link = link
         self.handle = handle
         self.incoming = incoming
+        self.reliable = reliable
     }
 
     public func send(_ payload: Data) async throws {
         guard let link else { throw GarminLinkError.notReady }
-        link.sendService(payload, on: handle)
+        if reliable {
+            link.sendService(payload, on: handle)
+        } else {
+            link.sendUnreliable(payload, on: handle)
+        }
     }
 }
 

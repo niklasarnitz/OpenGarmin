@@ -76,6 +76,8 @@ public protocol WatchService: AnyObject, Observable {
     /// The file currently downloading during a sync, nil otherwise.
     var fileProgress: FileTransferProgress? { get }
     var events: AsyncStream<WatchEvent> { get }
+    /// The emergency contacts the watch can read for incident detection.
+    var emergencyContacts: [EmergencyContact] { get }
 
     func startScanning()
     func stopScanning()
@@ -104,4 +106,8 @@ public protocol WatchService: AnyObject, Observable {
     /// Converts a GPX track to a course and uploads it. `progress` reports the upload as a fraction from 0 to 1.
     func installCourse(gpx: Data, name: String, includeTurns: Bool,
                        progress: @escaping @MainActor (Double) -> Void) async throws
+    func setEmergencyContacts(_ contacts: [EmergencyContact])
+    /// Streams the readings of `metrics` while the stream is iterated. The watch streams a metric only while someone
+    /// listens to it: ending the iteration stops it.
+    func liveReadings(_ metrics: Set<LiveMetric>) -> AsyncStream<LiveReading>
 }
