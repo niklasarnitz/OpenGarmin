@@ -282,6 +282,8 @@ public final class GarminWatchService: WatchService {
                 setPairedWatch(watch)
             }
             state = .connected
+            // Files a stopped import left in the inbox are imported on every connect, not only at launch.
+            Task { await self.importer.start() }
             let session = session
             let profile = store.userProfile
             Task { [weak self] in

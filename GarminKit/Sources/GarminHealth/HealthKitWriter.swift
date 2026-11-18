@@ -49,7 +49,11 @@ public actor HealthKitWriter {
         summary.sleepSessionsWritten = batch.sleep.count
         if !batch.stress.isEmpty { summary.skipped.append("stress: no HealthKit type") }
         if !batch.bodyBattery.isEmpty { summary.skipped.append("bodyBattery: no HealthKit type") }
-        try await store.save(groups.flatMap(\.samples))
+        // A first sync can hold weeks of samples; save them in large chunks rather than one unbounded call.
+        let samples = groups.flatMap(\.samples)
+        for start in stride(from: 0, to: samples.count, by: 10_000) {
+            try await store.save(Array(samples[start..<min(start + 10_000, samples.count)]))
+        }
 
         #if os(iOS)
         for activity in batch.activities {

@@ -73,3 +73,19 @@ import GarminModels
     let identifiers = all.compactMap { $0.metadata?[HKMetadataKeySyncIdentifier] as? String }
     #expect(Set(identifiers).count == 6)
 }
+
+@Test func overlappingFilesInOneBatchKeepOneSamplePerSyncIdentifier() {
+    let device = HKDevice(name: "Venu 4", manufacturer: "Garmin", model: "Venu 4", hardwareVersion: nil,
+                          firmwareVersion: nil, softwareVersion: nil, localIdentifier: nil, udiDeviceIdentifier: nil)
+    let start = Date(timeIntervalSince1970: 1_000)
+    var batch = HealthBatch()
+    // Two monitoring files both carry the 60-second step interval at `start`; the later file's value wins.
+    batch.steps = [
+        IntervalSample(start: start, end: start.addingTimeInterval(60), value: 40),
+        IntervalSample(start: start.addingTimeInterval(60), end: start.addingTimeInterval(120), value: 7),
+        IntervalSample(start: start, end: start.addingTimeInterval(60), value: 50),
+    ]
+    let steps = HealthKitMapping.samples(for: batch, device: device).first { $0.field == "steps" }!.samples
+    let values = steps.map { ($0 as! HKQuantitySample).quantity.doubleValue(for: .count()) }
+    #expect(values == [50, 7])
+}

@@ -99,7 +99,19 @@ enum HealthKitMapping {
             ("hrv", points(batch.hrv, .heartRateVariabilitySDNN, .secondUnit(with: .milli), device)),
         ]
         groups.append(("sleep", batch.sleep.flatMap { sleepSamples($0, device: device) }))
-        return groups
+        return groups.map { ($0.field, uniqueBySyncIdentifier($0.samples)) }
+    }
+
+    /// Overlapping FIT files in one batch repeat samples. HealthKit rejects a save that holds two samples with the same
+    /// sync identifier, so only the last sample per identifier is kept.
+    static func uniqueBySyncIdentifier(_ samples: [HKSample]) -> [HKSample] {
+        var index: [String: Int] = [:]
+        var unique: [HKSample] = []
+        for sample in samples {
+            guard let id = sample.metadata?[HKMetadataKeySyncIdentifier] as? String else { unique.append(sample); continue }
+            if let existing = index[id] { unique[existing] = sample } else { index[id] = unique.count; unique.append(sample) }
+        }
+        return unique
     }
 
     static func quantity(_ id: HKQuantityTypeIdentifier, _ unit: HKUnit, _ value: Double,
