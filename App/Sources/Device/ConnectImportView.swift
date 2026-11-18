@@ -225,8 +225,9 @@ final class ConnectImportModel {
         while let current = day {
             let finished = if let first { current < first } else { emptyDays >= 30 && current < (earliestActivity ?? .distantFuture) }
             if finished { break }
-            progress = "Stress and Body Battery, \(current.formatted(date: .abbreviated, time: .omitted))"
-            let key = "connect-daily-\(Int(current.timeIntervalSince1970))"
+            progress = "Daily data, \(current.formatted(date: .abbreviated, time: .omitted))"
+            let parts = calendar.dateComponents([.year, .month, .day], from: current)
+            let key = String(format: "connect-daily-v2-%04ld-%02ld-%02ld", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
             if await watch.hasImported(key) {
                 emptyDays = 0
             } else {
@@ -241,7 +242,7 @@ final class ConnectImportModel {
             }
             day = calendar.date(byAdding: .day, value: -1, to: current)
         }
-        return "Imported \(importedActivities) activities and \(importedDays) days of stress and Body Battery."
+        return "Imported \(importedActivities) activities and \(importedDays) days of daily data."
     }
 
     /// Every activity between two calendar days, in pages of 100.

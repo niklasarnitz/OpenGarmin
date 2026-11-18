@@ -112,6 +112,24 @@ enum ConnectRequests {
         "/wellness-service/wellness/dailyStress/\(day)"
     }
 
+    static let socialProfilePath = "/userprofile-service/socialProfile"
+
+    static func dailySleepPath(_ name: String) -> String {
+        "/wellness-service/wellness/dailySleepData/\(name)"
+    }
+
+    static func stepsChartPath(_ name: String) -> String {
+        "/wellness-service/wellness/dailySummaryChart/\(name)"
+    }
+
+    static func dailySummaryPath(_ name: String) -> String {
+        "/usersummary-service/usersummary/daily/\(name)"
+    }
+
+    static func hrvPath(_ day: String) -> String {
+        "/hrv-service/hrv/\(day)"
+    }
+
     /// "yyyy-MM-dd" of a calendar day, the form Garmin's date parameters take.
     static func day(_ date: Date, calendar: Calendar) -> String {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
