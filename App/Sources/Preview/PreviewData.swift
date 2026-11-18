@@ -5,8 +5,8 @@ import GarminSession
 /// Deterministic sample data so every screen shows realistic content in previews and the simulator.
 enum PreviewData {
     static let capabilities: Set<GarminCapability> = [
-        .sync, .deviceInitiatesSync, .gncs, .findMyPhone, .findMyWatch, .connectiq,
-        .weatherConditions, .weatherAlerts, .workoutDownload, .liveTrack, .gpsEphemerisDownload, .incidentDetection,
+        .sync, .deviceInitiatesSync, .gncs, .findMyPhone, .findMyWatch, .connectiqHttp,
+        .weatherConditions, .weatherAlerts, .workoutDownload, .livetrack, .gpsEphemerisDownload, .incidentDetection,
     ]
 
     static func pairedWatch(now: Date = .now) -> PairedWatch {

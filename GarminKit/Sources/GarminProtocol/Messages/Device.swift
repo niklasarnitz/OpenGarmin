@@ -95,30 +95,15 @@ public struct GFDIConfiguration: GFDIIncoming, GFDIOutgoing, Sendable, Equatable
     public func acknowledgement() -> GFDIResponse { .ack(.configuration) }
 }
 
-/// Maps `GarminCapability` to Gadgetbridge's capability bit order.
-///
-/// `GarminCapability` raw values do not follow Gadgetbridge's `GarminCapability` order from index 11 on
-/// (for example `weatherConditions` is 23 here and 26 in Gadgetbridge), so the wire index is listed by name.
+/// `GarminCapability.rawValue` is the bit index in Gadgetbridge's capability bitmask.
 enum GFDICapabilityBits {
-    static let index: [GarminCapability: Int] = [
-        .connectMobileFitLink: 0, .golfFitLink: 1, .vivokidJrFitLink: 2, .sync: 3, .deviceInitiatesSync: 4,
-        .hostInitiatedSyncRequests: 5, .gncs: 6, .advancedMusicControls: 7, .findMyPhone: 8, .findMyWatch: 9,
-        .connectiq: 10, .connectiqWatchAppDownload: 12, .connectiqWidgetDownload: 13,
-        .connectiqWatchFaceDownload: 14, .connectiqDataFieldDownload: 15, .connectiqAppManagement: 16,
-        .courseDownload: 17, .workoutDownload: 18, .golfCourseDownload: 19, .deltaSoftwareUpdateFiles: 20,
-        .fitpaySync: 21, .liveTrack: 22, .weatherConditions: 26, .weatherAlerts: 27, .gpsEphemerisDownload: 28,
-        .explicitArchive: 29, .swingSensor: 30, .incidentDetection: 32, .realtimeSettings: 92,
-    ]
-
-    private static let capability: [Int: GarminCapability] = Dictionary(uniqueKeysWithValues: index.map { ($1, $0) })
-
     /// `(129 + 7) / 8`: Gadgetbridge sends its capability set as a fixed-width bitmask of its 129 entries.
     static let byteCount = 17
 
     static func encode(_ capabilities: Set<GarminCapability>) -> [UInt8] {
         var bytes = [UInt8](repeating: 0, count: byteCount)
         for item in capabilities {
-            guard let bit = index[item] else { continue }
+            let bit = item.rawValue
             bytes[bit / 8] |= UInt8(1 << (bit % 8))
         }
         return bytes
@@ -128,7 +113,7 @@ enum GFDICapabilityBits {
         var result = Set<GarminCapability>()
         for (byteIndex, byte) in bytes.enumerated() {
             for bit in 0..<8 where byte & UInt8(1 << bit) != 0 {
-                if let item = capability[byteIndex * 8 + bit] { result.insert(item) }
+                if let item = GarminCapability(rawValue: byteIndex * 8 + bit) { result.insert(item) }
             }
         }
         return result

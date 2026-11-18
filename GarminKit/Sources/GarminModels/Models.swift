@@ -31,14 +31,34 @@ public struct DeviceInfo: Sendable, Codable, Hashable {
     public var softwareVersionString: String { String(format: "%d.%02d", softwareVersion / 100, softwareVersion % 100) }
 }
 
-/// Mirrors Gadgetbridge's GarminCapability (bit index = rawValue).
+/// Mirrors Gadgetbridge's GarminCapability; rawValue = bit index in the CONFIGURATION (5050) bitmask.
 public enum GarminCapability: Int, Sendable, Codable, CaseIterable {
-    case connectMobileFitLink = 0, golfFitLink, vivokidJrFitLink, sync, deviceInitiatesSync, hostInitiatedSyncRequests
-    case gncs, advancedMusicControls, findMyPhone, findMyWatch, connectiq, swingSensor, connectiqWatchAppDownload
-    case connectiqWidgetDownload, connectiqWatchFaceDownload, connectiqDataFieldDownload, connectiqAppManagement
-    case courseDownload, workoutDownload, golfCourseDownload, deltaSoftwareUpdateFiles, fitpaySync, liveTrack
-    case weatherConditions, weatherAlerts, gpsEphemerisDownload, explicitArchive, setupWizard, incidentDetection
-    case realtimeSettings, unknown30, unknown31, unknown32
+    case connectMobileFitLink = 0, golfFitLink, vivokidJrFitLink, sync, deviceInitiatesSync,
+    hostInitiatedSyncRequests, gncs, advancedMusicControls, findMyPhone, findMyWatch,
+    connectiqHttp, connectiqSettings, connectiqWatchAppDownload, connectiqWidgetDownload, connectiqWatchFaceDownload,
+    connectiqDataFieldDownload, connectiqAppManagement, courseDownload, workoutDownload, golfCourseDownload,
+    deltaSoftwareUpdateFiles, fitpay, livetrack, livetrackAutoStart, livetrackMessaging,
+    groupLivetrack, weatherConditions, weatherAlerts, gpsEphemerisDownload, explicitArchive,
+    swingSensor, swingSensorRemote, incidentDetection, trueup, instantInput,
+    segments, audioPromptLap, audioPromptPaceSpeed, audioPromptHeartRate, audioPromptPower,
+    audioPromptNavigation, audioPromptCadence, sportGeneric, sportRunning, sportCycling,
+    sportTransition, sportFitnessEquipment, sportSwimming, stopSyncAfterSoftwareUpdate, calendar,
+    wifiSetup, smsNotifications, basicMusicControls, audioPromptsSpeech, deltaSoftwareUpdates,
+    garminDeviceInfoFileType, sportProfileSetup, hsaSupport, sportStrength, sportCardio,
+    unionPay, ipass, ciqAudioContentProvider, unionPayInternational, requestPairFlow,
+    locationUpdate, lteSupport, deviceDrivenLivetrackSupport, customCannedTextListSupport, exploreSync,
+    incidentDetectAndAssistance, currentTimeRequestSupport, contactsSupport, launchRemoteCiqAppSupport, deviceMessages,
+    waypointTransfer, multiLinkService, oauthCredentials, golf9Plus9, antiTheftAlarm,
+    inreach, eventSharing, hsaFeatureMessage, handsCalibration, locationUpdateProvider,
+    liveTrackCourseSharing, simpleSetupFeatureList, windDataAppSupport, httpRawResourceRequest, samd,
+    sync2, navigationSync, realtimeSettings, handCalibrationImgDetect, toystoreMobile,
+    featureCapabilitiesExchange, deepLinking, garminConnectServer, credentialsOauth2Support, genericCredentials,
+    capability100, capability101, capability102, capability103, capability104,
+    capability105, capability106, capability107, capability108, capability109,
+    capability110, capability111, capability112, capability113, capability114,
+    capability115, capability116, capability117, capability118, capability119,
+    capability120, capability121, capability122, capability123, capability124,
+    capability125, capability126, capability127, capability128
 }
 
 public struct BatteryStatus: Sendable, Codable, Hashable {
