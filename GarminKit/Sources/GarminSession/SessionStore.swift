@@ -34,6 +34,7 @@ public final class SessionStore {
 
     private static let pairedWatchKey = "garmin.pairedWatch"
     private static let userProfileKey = "garmin.userProfile"
+    private static let emergencyContactsKey = "garmin.emergencyContacts"
 
     public let directory: URL
     private let defaults: UserDefaults
@@ -65,6 +66,19 @@ public final class SessionStore {
 
     /// One summary per day that has data, oldest first.
     public var days: [DailySummary] { snapshot.days }
+
+    public var emergencyContacts: [EmergencyContact] {
+        get {
+            defaults.data(forKey: Self.emergencyContactsKey).flatMap { try? JSONDecoder().decode([EmergencyContact].self, from: $0) } ?? []
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue), !newValue.isEmpty {
+                defaults.set(data, forKey: Self.emergencyContactsKey)
+            } else {
+                defaults.removeObject(forKey: Self.emergencyContactsKey)
+            }
+        }
+    }
 
     public var pairedWatch: PairedWatch? {
         get {

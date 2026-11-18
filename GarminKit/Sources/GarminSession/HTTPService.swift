@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import GarminModels
 import GarminProtobuf
 
 /// Answers the watch's HTTP and data transfer requests, as Gadgetbridge's HttpHandler does for the ones that matter
@@ -18,12 +19,15 @@ final class WatchHTTPService {
     }
 
     private let agps: AGPSCache?
+    private let contacts: @MainActor () -> [EmergencyContact]
     private var payloads: [(id: UInt32, data: Data)] = []
     private var lastPayloadID = UInt32.random(in: 0..<(UInt32.max / 2))
 
     /// - Parameter agps: the AGPS cache. nil answers no AGPS request.
-    init(agps: AGPSCache?) {
+    /// - Parameter contacts: the emergency contacts the watch reads from its contact list request.
+    init(agps: AGPSCache?, contacts: @escaping @MainActor () -> [EmergencyContact] = { [] }) {
         self.agps = agps
+        self.contacts = contacts
     }
 
     /// The reply to an HTTP or data transfer request from the watch, or nil when the request gets no reply.
@@ -91,6 +95,11 @@ final class WatchHTTPService {
     /// Gadgetbridge's AgpsInterceptor: the cached file, with an ETag, and a 304 when the watch already has that file.
     /// Any other URL gets no answer.
     private func answer(url: String, headers: [String: String]) -> Answer? {
+        if Self.isContactsRequest(url) {
+            guard headers["accept"] == "application/octet-stream" else { return nil }
+            return Answer(status: 200, headers: ["Content-Type": "application/octet-stream"],
+                          body: EmergencyContactsResponse.encode(contacts()))
+        }
         guard let served = agps?.servedFile(for: url) else { return nil }
         let etag = "\"" + Insecure.MD5.hash(data: served.data).map { String(format: "%02x", $0) }.joined() + "\""
         var answer = Answer(status: 200, headers: [
@@ -103,6 +112,13 @@ final class WatchHTTPService {
             answer.body = Data()
         }
         return answer
+    }
+
+    /// Gadgetbridge's ContactsInterceptor: the watch's contact list on Garmin's device gateway.
+    private static func isContactsRequest(_ url: String) -> Bool {
+        guard let parts = URLComponents(string: url) else { return false }
+        return (parts.host == "connectapi.garmin.com" || parts.host == "connectapi.garmin.cn")
+            && parts.path == "/device-gateway/usercontact/contacts"
     }
 
     /// Gadgetbridge's DataTransferHandler.handleDataDownloadRequest: one chunk of a registered payload, from the offset

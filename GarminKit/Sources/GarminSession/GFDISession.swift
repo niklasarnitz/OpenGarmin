@@ -14,6 +14,7 @@ enum GFDISessionOutput: Sendable {
     case progress(Double, String)
     case syncFinished
     case event(WatchEvent)
+    case live(LiveReading)
 }
 
 /// Protocol engine for one watch on one link: handshake, file sync, uploads, weather, notifications, find my
@@ -34,7 +35,7 @@ final class GFDISession {
 
     private typealias Item = GDI_Proto_FileAccess_ItemReference
 
-    private let link: any GarminServiceLink
+    let link: any GarminServiceLink
     private let store: SessionStore
     private let capabilities: Set<GarminCapability>
     private let phoneName: String
@@ -42,6 +43,8 @@ final class GFDISession {
     private let newSyncProtocol: Bool?
     private let weatherProvider: (@MainActor () async -> WeatherReport?)?
     private let http: WatchHTTPService
+    /// The realtime streams the app asked for, by metric. Managed in GFDISession+Realtime.swift.
+    var liveStreams: [LiveMetric: LiveStream] = [:]
     let output: @MainActor (GFDISessionOutput) -> Void
 
     private var deviceInfo: DeviceInfo?
@@ -105,6 +108,7 @@ final class GFDISession {
          newSyncProtocol: Bool? = nil,
          weatherProvider: (@MainActor () async -> WeatherReport?)?,
          agps: AGPSCache? = nil,
+         contacts: @escaping @MainActor () -> [EmergencyContact] = { [] },
          output: @escaping @MainActor (GFDISessionOutput) -> Void) {
         self.link = link
         self.store = store
@@ -112,12 +116,13 @@ final class GFDISession {
         self.phoneName = phoneName
         self.newSyncProtocol = newSyncProtocol
         self.weatherProvider = weatherProvider
-        self.http = WatchHTTPService(agps: agps)
+        self.http = WatchHTTPService(agps: agps, contacts: contacts)
         self.output = output
     }
 
     /// The link dropped: fail any upload in flight and forget the sync.
     func disconnected() {
+        stopAllLive()
         finishUpload(.failure(GarminWatchError.notConnected))
         download = nil
         pending = []
@@ -210,7 +215,7 @@ final class GFDISession {
         await send(GFDISetDeviceSettings(settings: [
             .autoUploadEnabled: .bool(true),
             .weatherConditionsEnabled: .bool(true),
-            .weatherAlertsEnabled: .bool(false),
+            .weatherAlertsEnabled: .bool(watchCapabilities.contains(.weatherAlerts)),
         ]))
         await send(GFDISystemEvent(.timeUpdated))
         await send(GFDISystemEvent(.syncReady))

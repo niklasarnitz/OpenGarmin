@@ -37,6 +37,7 @@ public final class GarminWatchService: WatchService {
     /// The retained history: every imported activity and the samples of the last 30 days.
     public private(set) var latest: HealthBatch
     public let events: AsyncStream<WatchEvent>
+    public private(set) var emergencyContacts: [EmergencyContact]
     /// The GPS satellite data the watch takes from the phone: its URLs, cached files and refresh.
     public let agps: AGPSCache
 
@@ -54,6 +55,8 @@ public final class GarminWatchService: WatchService {
     @ObservationIgnored private var reconnectAttempts = 0
     @ObservationIgnored private var scanner: GarminScanner?
     @ObservationIgnored private var scanTask: Task<Void, Never>?
+    /// The apps' live readings, by subscriber. The watch streams the union of their metrics.
+    @ObservationIgnored private var liveSubscribers: [UUID: (metrics: Set<LiveMetric>, sink: AsyncStream<LiveReading>.Continuation)] = [:]
 
     /// - Parameters:
     ///   - weather: supplies the forecast when the watch asks for it.
@@ -74,6 +77,7 @@ public final class GarminWatchService: WatchService {
         calendarProvider = calendar
         self.makeLink = makeLink
         latest = store.history
+        emergencyContacts = store.emergencyContacts
         let paired = store.pairedWatch
         pairedWatch = paired
         state = paired == nil ? .noWatchPaired : .disconnected(lastSeen: paired?.lastSync)
@@ -177,6 +181,30 @@ public final class GarminWatchService: WatchService {
         try await session.setTime()
     }
 
+    public func setEmergencyContacts(_ contacts: [EmergencyContact]) {
+        store.emergencyContacts = contacts
+        emergencyContacts = contacts
+    }
+
+    public func liveReadings(_ metrics: Set<LiveMetric>) -> AsyncStream<LiveReading> {
+        let id = UUID()
+        let (stream, sink) = AsyncStream.makeStream(of: LiveReading.self)
+        liveSubscribers[id] = (metrics, sink)
+        sink.onTermination = { [weak self] _ in
+            Task { @MainActor in
+                self?.liveSubscribers.removeValue(forKey: id)
+                self?.syncLive()
+            }
+        }
+        syncLive()
+        return stream
+    }
+
+    /// Tells the session which metrics the subscribers want.
+    private func syncLive() {
+        session?.setLive(liveSubscribers.values.reduce(into: Set<LiveMetric>()) { $0.formUnion($1.metrics) })
+    }
+
     // MARK: - Connection
 
     private func setPairedWatch(_ watch: PairedWatch?) {
@@ -228,7 +256,7 @@ public final class GarminWatchService: WatchService {
         let newSync = GarminDeviceCatalog.all.first(where: { $0.id == pairedWatch?.catalogID })?.usesNewSyncProtocol
         return GFDISession(link: link, store: store, capabilities: GFDISession.phoneCapabilities,
                            phoneName: phoneName, newSyncProtocol: newSync, weatherProvider: weatherProvider,
-                           agps: agps) { [weak self] output in
+                           agps: agps, contacts: { [weak self] in self?.emergencyContacts ?? [] }) { [weak self] output in
             guard let self, current == self.generation else { return }
             self.handle(output)
         }
@@ -267,6 +295,7 @@ public final class GarminWatchService: WatchService {
                 setPairedWatch(watch)
             }
             state = .connected
+            syncLive()
             let session = session
             let profile = store.userProfile
             Task { [weak self] in
@@ -291,6 +320,10 @@ public final class GarminWatchService: WatchService {
                 setPairedWatch(watch)
             }
             state = .connected
+        case let .live(reading):
+            for subscriber in liveSubscribers.values where subscriber.metrics.contains(reading.metric) {
+                subscriber.sink.yield(reading)
+            }
         case let .event(event):
             if case let .battery(status) = event { battery = status }
             if case .healthBatchImported = event { latest = store.history }

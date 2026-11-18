@@ -30,6 +30,7 @@ struct DeviceView: View {
                 faceCard(watch)
                 connection(watch)
                 profile
+                safety
                 features
                 notifications(watch)
                 satelliteData
@@ -81,6 +82,11 @@ struct DeviceView: View {
         MetricTile("Connection", symbol: "antenna.radiowaves.left.and.right", tint: Palette.glacier) {
             LabeledContent("Last sync", value: Formatting.lastSeen(watch.lastSync))
             LabeledContent("State", value: app.watch.state.label)
+            NavigationLink {
+                LiveView()
+            } label: {
+                Label("Live readings", systemImage: "waveform.path.ecg")
+            }
             HStack(spacing: 10) {
                 Button("Sync now", systemImage: "arrow.triangle.2.circlepath") {
                     Task { await app.watch.syncNow() }
@@ -107,6 +113,16 @@ struct DeviceView: View {
                 ProfileEditorView()
             } label: {
                 Label("Edit profile and send to watch", systemImage: "pencil")
+            }
+        }
+    }
+
+    private var safety: some View {
+        MetricTile("Safety", symbol: "shield.lefthalf.filled", tint: Palette.ember) {
+            NavigationLink {
+                EmergencyContactsView()
+            } label: {
+                Label("Emergency contacts", systemImage: "person.2.fill")
             }
         }
     }

@@ -20,6 +20,7 @@
 		60C0672559EBB5D2A86DB621 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0BAF61680880105D7D7002B /* OnboardingView.swift */; };
 		6F189C3A966DAFCA9748215B /* WorkoutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D378DA9CDCE4CA18315C54 /* WorkoutsView.swift */; };
 		6FAD24C777526C3410D2D5D8 /* ProfileEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B8E621E4415862DE0E261CE /* ProfileEditorView.swift */; };
+		7368AD620D9FEA803B015C45 /* LiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F0A54FFE7A8096DA9A9925A /* LiveView.swift */; };
 		7E81CE93BC975632B0473887 /* DeviceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D61366771DCE92B050FFAD6 /* DeviceView.swift */; };
 		80BA2EAB50DAD6428E826BD4 /* CalendarSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1930890AA4F22521AB81AE30 /* CalendarSync.swift */; };
 		A539AEFF57B554D63409BB4F /* OpenGarminApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66304C8BFAC98948490CDE1D /* OpenGarminApp.swift */; };
@@ -33,9 +34,11 @@
 		CB1DD135F3D32E424150C26D /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F779ECF46FBB507B40C8560 /* Theme.swift */; };
 		CE358DDCA24CFBB8822ACC76 /* SleepDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A025B39D7E30C2F7E165676 /* SleepDetailView.swift */; };
 		D9594E3ABFAED63AE7EA9C88 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5CFEAA3BDD423D4A8C01656 /* AppEnvironment.swift */; };
+		E6BDB58A68707B3B6C95EC63 /* EmergencyContactsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 081BC25D6EC5C3C6211D4720 /* EmergencyContactsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		081BC25D6EC5C3C6211D4720 /* EmergencyContactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmergencyContactsView.swift; sourceTree = "<group>"; };
 		0B8E621E4415862DE0E261CE /* ProfileEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEditorView.swift; sourceTree = "<group>"; };
 		0DAC9E480BBAC0305C82B88C /* GarminKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = GarminKit; path = GarminKit; sourceTree = SOURCE_ROOT; };
 		12AAAB9884D5CEE58BF72E6B /* HealthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthStore.swift; sourceTree = "<group>"; };
@@ -52,6 +55,7 @@
 		5B1AF0BF3C99B090A472DEC2 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 		66304C8BFAC98948490CDE1D /* OpenGarminApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenGarminApp.swift; sourceTree = "<group>"; };
 		666C21D6E1BE28D3CC64AFFD /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		6F0A54FFE7A8096DA9A9925A /* LiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveView.swift; sourceTree = "<group>"; };
 		8DF4CAE2F03A9519343B1349 /* OpenGarmin.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = OpenGarmin.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9C1522E98A9929715FDC41E6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9EF7D33B4E010E9374D8A602 /* PreviewWatchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewWatchService.swift; sourceTree = "<group>"; };
@@ -77,6 +81,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		08CE13449DF2CCA283D8F7BB /* Safety */ = {
+			isa = PBXGroup;
+			children = (
+				081BC25D6EC5C3C6211D4720 /* EmergencyContactsView.swift */,
+			);
+			path = Safety;
+			sourceTree = "<group>";
+		};
 		17F0EF4DDF6A2978D84F48F1 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
@@ -84,8 +96,10 @@
 				C836DF1149E25C5EF185EB0B /* App */,
 				EA6237051BD29C0064322E5C /* Design */,
 				2403282529733A100186909D /* Device */,
+				D7532DC9BB39E5235E63CC6A /* Live */,
 				A84ED7E9B679CFE574C754A7 /* Onboarding */,
 				E2AFB27B0354F5DDFDB206D6 /* Preview */,
+				08CE13449DF2CCA283D8F7BB /* Safety */,
 				F8669339010289CE18B6C38A /* Services */,
 				AC0CCD2E3656C0140E03A769 /* Today */,
 				59080AA1CC7FDCFBFFFFAFE0 /* Workouts */,
@@ -171,6 +185,14 @@
 				66304C8BFAC98948490CDE1D /* OpenGarminApp.swift */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		D7532DC9BB39E5235E63CC6A /* Live */ = {
+			isa = PBXGroup;
+			children = (
+				6F0A54FFE7A8096DA9A9925A /* LiveView.swift */,
+			);
+			path = Live;
 			sourceTree = "<group>";
 		};
 		DBE578DD850B420EB8BA9A1B /* Resources */ = {
@@ -306,8 +328,10 @@
 				80BA2EAB50DAD6428E826BD4 /* CalendarSync.swift in Sources */,
 				58A293F63F43C183445E8AB8 /* Components.swift in Sources */,
 				7E81CE93BC975632B0473887 /* DeviceView.swift in Sources */,
+				E6BDB58A68707B3B6C95EC63 /* EmergencyContactsView.swift in Sources */,
 				3EEF1F4B50A5D048465BF5F5 /* FindMyPhoneAlert.swift in Sources */,
 				03909B80966ED30B8D7EAE6C /* HealthStore.swift in Sources */,
+				7368AD620D9FEA803B015C45 /* LiveView.swift in Sources */,
 				C8DCAAB42401ABAEB53D57C5 /* MainTabView.swift in Sources */,
 				60C0672559EBB5D2A86DB621 /* OnboardingView.swift in Sources */,
 				A539AEFF57B554D63409BB4F /* OpenGarminApp.swift in Sources */,

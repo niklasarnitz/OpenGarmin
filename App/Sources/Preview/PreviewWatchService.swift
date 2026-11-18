@@ -14,6 +14,7 @@ final class PreviewWatchService: WatchService {
     private(set) var nearby: [NearbyWatch] = []
     private(set) var latest: HealthBatch = PreviewData.batch()
     let events = AsyncStream<WatchEvent>.makeStream().stream
+    private(set) var emergencyContacts: [EmergencyContact] = []
 
     private var scanTask: Task<Void, Never>?
 
@@ -78,6 +79,37 @@ final class PreviewWatchService: WatchService {
     func sendWorkout(_ plan: WorkoutPlan) async throws { try await simulateRoundTrip() }
     func updateProfile(_ profile: UserProfile) async throws { try await simulateRoundTrip() }
     func setTime() async throws { try await simulateRoundTrip() }
+
+    func setEmergencyContacts(_ contacts: [EmergencyContact]) {
+        emergencyContacts = contacts
+    }
+
+    /// Simulated readings, about twice a second, for the metrics asked for.
+    func liveReadings(_ metrics: Set<LiveMetric>) -> AsyncStream<LiveReading> {
+        AsyncStream { continuation in
+            let task = Task {
+                var tick = 0.0
+                while !Task.isCancelled {
+                    tick += 1
+                    let readings: [LiveReading] = [
+                        .heartRate(bpm: 64 + Int(9 * sin(tick / 4)), resting: 58),
+                        .spo2(96 + Int(2 * sin(tick / 6))),
+                        .stress(30 + Int(15 * sin(tick / 5))),
+                        .bodyBattery(max(0, 78 - Int(tick) / 10)),
+                        .steps(count: 4200 + Int(tick) * 12, goal: 10_000),
+                        .accelerometer((0 ..< 3).map { index in
+                            AccelerationSample(x: 0.05 * sin(tick + Double(index)), y: 0.02, z: -1)
+                        }),
+                    ]
+                    for reading in readings where metrics.contains(reading.metric) {
+                        continuation.yield(reading)
+                    }
+                    try? await Task.sleep(for: .milliseconds(500))
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
 
     private func simulateRoundTrip() async throws {
         try await Task.sleep(for: .milliseconds(500))

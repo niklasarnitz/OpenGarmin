@@ -43,3 +43,9 @@ import Foundation
     _ = handshake.receive(Data([0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0]))
     #expect(handshake.step == .refused(status: 1))
 }
+
+@Test func realtimeRegistrationIsUnreliable() {
+    // REGISTER_ML for service 16 (accelerometer) with no MLR framing: client id 2, reliable flag 0.
+    #expect(Array(MLRControl.registerRequest(service: 16, reliable: false)) == [0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0])
+    #expect(Array(MLRControl.registerRequest(service: 16, reliable: true)) == [0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 16, 0, 2])
+}

@@ -60,6 +60,8 @@ public protocol WatchService: AnyObject, Observable {
     /// Most recent synced data kept for the dashboard (also written to HealthKit by the app).
     var latest: HealthBatch { get }
     var events: AsyncStream<WatchEvent> { get }
+    /// The emergency contacts the watch can read for incident detection.
+    var emergencyContacts: [EmergencyContact] { get }
 
     func startScanning()
     func stopScanning()
@@ -74,4 +76,8 @@ public protocol WatchService: AnyObject, Observable {
     func sendWorkout(_ plan: WorkoutPlan) async throws
     func updateProfile(_ profile: UserProfile) async throws
     func setTime() async throws
+    func setEmergencyContacts(_ contacts: [EmergencyContact])
+    /// Streams the readings of `metrics` while the stream is iterated. The watch streams a metric only while someone
+    /// listens to it: ending the iteration stops it.
+    func liveReadings(_ metrics: Set<LiveMetric>) -> AsyncStream<LiveReading>
 }
