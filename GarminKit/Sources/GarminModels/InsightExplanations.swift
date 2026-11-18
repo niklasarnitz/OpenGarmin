@@ -77,7 +77,7 @@ public struct InsightDriver: Sendable, Equatable {
     }
 }
 
-public enum InsightSuggestion: Sendable, Equatable, CaseIterable {
+public enum InsightSuggestion: Sendable, Hashable, CaseIterable {
     /// Not enough history yet: wear the watch so a baseline can form.
     case keepTracking
     /// The value is better than usual: carry on as before.
