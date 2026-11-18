@@ -7,7 +7,7 @@ let package = Package(
     products: [
         .library(name: "GarminKit", targets: [
             "GarminCore", "GarminModels", "GarminProtobuf", "GarminProtocol", "GarminFIT",
-            "GarminTransport", "GarminDevices", "GarminSession", "GarminHealth",
+            "GarminTransport", "GarminDevices", "GarminSession", "GarminHealth", "GarminShared", "GarminExport",
         ]),
     ],
     dependencies: [
@@ -35,6 +35,10 @@ let package = Package(
         ]),
         // HealthKit writing of GarminModels.
         .target(name: "GarminHealth", dependencies: ["GarminModels"]),
+        // Data the widgets and intents read from the app: the snapshot in the App Group and its store.
+        .target(name: "GarminShared", dependencies: ["GarminModels"]),
+        // Exports of an activity: GPX text, and the raw FIT file found in the session store.
+        .target(name: "GarminExport", dependencies: ["GarminModels", "GarminFIT"]),
 
         .testTarget(name: "GarminCoreTests", dependencies: ["GarminCore"]),
         .testTarget(name: "GarminProtocolTests", dependencies: ["GarminProtocol"]),
@@ -42,6 +46,8 @@ let package = Package(
         .testTarget(name: "GarminTransportTests", dependencies: ["GarminTransport"]),
         .testTarget(name: "GarminDevicesTests", dependencies: ["GarminDevices"]),
         .testTarget(name: "GarminHealthTests", dependencies: ["GarminHealth", "GarminModels"]),
+        .testTarget(name: "GarminSharedTests", dependencies: ["GarminShared", "GarminModels"]),
+        .testTarget(name: "GarminExportTests", dependencies: ["GarminExport", "GarminModels", "GarminFIT"]),
         .testTarget(name: "GarminSessionTests", dependencies: [
             "GarminSession", "GarminCore", "GarminFIT", "GarminModels", "GarminProtocol", "GarminTransport",
         ]),
