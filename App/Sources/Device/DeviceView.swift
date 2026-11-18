@@ -147,12 +147,17 @@ struct DeviceView: View {
     /// Garmin Connect history: signs in to the account and imports the activities and daily data it holds.
     @ViewBuilder
     private var connectImport: some View {
-        if let service = app.watch as? GarminWatchService {
+        if let model = app.connectImport {
             MetricTile("Garmin Connect", symbol: "icloud.and.arrow.down", tint: Palette.glacier) {
                 NavigationLink {
-                    ConnectImportView(watch: service)
+                    ConnectImportView(model: model)
                 } label: {
                     Label("Import history from Garmin Connect", systemImage: "arrow.down.circle")
+                }
+                if model.isImporting {
+                    Text("Importing from Garmin Connect \(Int(model.fraction * 100))%")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
         }

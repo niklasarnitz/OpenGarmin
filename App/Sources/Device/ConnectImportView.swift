@@ -2,18 +2,14 @@ import SwiftUI
 import GarminConnect
 import GarminSession
 
-/// Imports the watch's history from a Garmin Connect account: the original files of the activities and the daily stress
-/// and Body Battery of a range. Reached from the Device screen.
+/// Imports the watch's history from a Garmin Connect account: the original files of the activities and the daily data of
+/// a range. Reached from the Device screen. The import runs in `ConnectImportModel`, which the app keeps.
 struct ConnectImportView: View {
-    @State private var model: ConnectImportModel
+    let model: ConnectImportModel
     @State private var email = ""
     @State private var password = ""
     @State private var code = ""
     @State private var days = 90
-
-    init(watch: GarminWatchService) {
-        _model = State(initialValue: ConnectImportModel(watch: watch))
-    }
 
     var body: some View {
         ScrollView {
@@ -92,31 +88,62 @@ struct ConnectImportView: View {
                 Text("All").tag(0)
             }
             .pickerStyle(.segmented)
-            Button("Import", systemImage: "arrow.down.circle.fill") {
-                model.importRange(days: days)
+            .disabled(model.isImporting)
+            if model.isImporting {
+                Button("Cancel", systemImage: "xmark.circle", role: .cancel) {
+                    model.cancelImport()
+                }
+                .buttonStyle(.glass)
+            } else {
+                Button("Import", systemImage: "arrow.down.circle.fill") {
+                    model.importRange(days: days)
+                }
+                .buttonStyle(.glassProminent)
+                .disabled(model.isBusy)
             }
-            .buttonStyle(.glassProminent)
-            .disabled(model.isBusy)
             if let progress = model.progress {
-                Text(progress)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                progressDetails(progress)
             }
             if let summary = model.summary {
-                Text(summary)
+                Text(LocalizedStringKey(summary))
                     .font(.footnote)
             }
             Button("Sign out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
                 model.signOut()
             }
             .buttonStyle(.glass)
-            .disabled(model.isBusy)
+            .disabled(model.isBusy || model.isImporting)
         }
+    }
+
+    @ViewBuilder
+    private func progressDetails(_ progress: ConnectImportProgress) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if model.total > 0 {
+                ProgressView(value: Double(model.done), total: Double(model.total))
+            }
+            Text("Activities \(progress.activities.done) of \(progress.activityTotal)")
+            Text("Days \(progress.days.done) of \(progress.dayTotal ?? 0)")
+            Text("Imported \(model.imported) · Already there \(model.skipped) · Failed \(model.failed)")
+            if let perMinute = model.itemsPerMinute {
+                Text("\(Int(perMinute)) per minute")
+            }
+            if let left = model.timeLeft {
+                Text("Time left: \(left)")
+            }
+            if let failure = progress.lastFailure {
+                Text("Last failure: \(failure)")
+            }
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-/// Drives the Garmin Connect import: sign-in, the verification code, and the import of a range of days into the watch's
-/// import stage, which reaches Health through the same path as the watch's own files.
+/// Drives the Garmin Connect import: sign-in, the verification code, and the import of a range of days. The import runs
+/// in the app's environment, so it goes on when the user leaves the screen. Its days and activities go to the watch's
+/// import stage, which reaches Health and the backend the same way the watch's own files do.
 @MainActor
 @Observable
 final class ConnectImportModel {
@@ -128,16 +155,56 @@ final class ConnectImportModel {
 
     private(set) var phase = Phase.signedOut
     private(set) var isBusy = false
-    private(set) var progress: String?
+    private(set) var isImporting = false
+    /// The counts of the last import, and of the one running.
+    private(set) var progress: ConnectImportProgress?
     private(set) var summary: String?
     private(set) var errorMessage: String?
+    private var startedAt: Date?
 
-    @ObservationIgnored private let client = GarminConnectClient()
+    @ObservationIgnored private let client: GarminConnectClient
     @ObservationIgnored private let watch: GarminWatchService
+    @ObservationIgnored private let backend: BackendSync
+    @ObservationIgnored private var importTask: Task<Void, Never>?
 
-    init(watch: GarminWatchService) {
+    init(watch: GarminWatchService, raw: ConnectRawStore, backend: BackendSync) {
         self.watch = watch
+        self.backend = backend
+        client = GarminConnectClient(raw: raw)
     }
+
+    // MARK: - Progress
+
+    /// Activities and days together, done and in all.
+    var done: Int { counts { $0.done } }
+    var total: Int { (progress?.activityTotal ?? 0) + (progress?.dayTotal ?? 0) }
+    var imported: Int { counts { $0.imported } }
+    var skipped: Int { counts { $0.skipped } }
+    var failed: Int { counts { $0.failed } }
+
+    /// Fraction of the import done, 0 to 1.
+    var fraction: Double { total > 0 ? min(1, Double(done) / Double(total)) : 0 }
+
+    /// Items per minute since the import started. Nil before the first item is done.
+    var itemsPerMinute: Double? {
+        guard isImporting, let startedAt, done > 0 else { return nil }
+        let minutes = Date.now.timeIntervalSince(startedAt) / 60
+        return minutes > 0 ? Double(done) / minutes : nil
+    }
+
+    /// The time left at the pace so far, as text. Nil until there is a pace and something is left.
+    var timeLeft: String? {
+        guard isImporting, let startedAt, done > 0, total > done else { return nil }
+        let left = Date.now.timeIntervalSince(startedAt) / Double(done) * Double(total - done)
+        return Duration.seconds(left).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .narrow))
+    }
+
+    private func counts(_ value: (ConnectImportProgress.Counts) -> Int) -> Int {
+        guard let progress else { return 0 }
+        return value(progress.activities) + value(progress.days)
+    }
+
+    // MARK: - Sign-in
 
     func refresh() async {
         guard !isBusy else { return }
@@ -168,23 +235,13 @@ final class ConnectImportModel {
         }
     }
 
-    func importRange(days: Int) {
-        perform {
-            self.summary = try await self.runImport(days: days)
-        }
-    }
-
-    /// Runs one work item at a time and shows its failure. A sign-out failure is the only one that leaves the user signed
-    /// in, so a `notSignedIn` failure returns the phase to signed out.
+    /// Runs one sign-in step and shows its failure. A `notSignedIn` failure returns the phase to signed out.
     private func perform(_ work: @escaping @MainActor () async throws -> Void) {
         guard !isBusy else { return }
         isBusy = true
         errorMessage = nil
         Task {
-            defer {
-                isBusy = false
-                progress = nil
-            }
+            defer { isBusy = false }
             do {
                 try await work()
             } catch {
@@ -196,64 +253,46 @@ final class ConnectImportModel {
         }
     }
 
-    /// Activities first, newest first, then the stress and Body Battery of each day, newest first, up to yesterday. Today
-    /// is left out because Body Battery is still changing; a day that was imported is skipped on the next run. `days` 0
-    /// imports every activity of the account and the stress and Body Battery back to its first day: the walk goes past
-    /// the earliest activity until 30 days in a row have no data.
-    private func runImport(days: Int) async throws -> String {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: .now)
-        let first = days == 0 ? nil : calendar.date(byAdding: .day, value: -(days - 1), to: today)
-        // Activities stored under the watch's unit number replace the watch's copy of the same activity in the history.
-        let unit = watch.pairedWatch?.info?.unitNumber ?? 0
+    // MARK: - Import
 
-        let activities = try await listActivities(from: first, to: days == 0 ? nil : today, calendar: calendar)
-        var importedActivities = 0
-        for (index, activity) in activities.enumerated() {
-            progress = "Activity \(index + 1) of \(activities.count)"
-            let key = "\(unit)-connect-\(activity.id)"
-            if await watch.hasImported(key) { continue }
-            guard let fit = try await client.originalFIT(id: activity.id) else { continue }
-            try await watch.importFITFile(fit, key: key)
-            importedActivities += 1
-        }
-
-        let earliestActivity = activities.map { calendar.startOfDay(for: $0.start) }.min()
-        var importedDays = 0
-        var emptyDays = 0
-        var day = calendar.date(byAdding: .day, value: -1, to: today)
-        while let current = day {
-            let finished = if let first { current < first } else { emptyDays >= 30 && current < (earliestActivity ?? .distantFuture) }
-            if finished { break }
-            progress = "Daily data, \(current.formatted(date: .abbreviated, time: .omitted))"
-            let parts = calendar.dateComponents([.year, .month, .day], from: current)
-            let key = String(format: "connect-daily-v3-%04ld-%02ld-%02ld", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
-            if await watch.hasImported(key) {
-                emptyDays = 0
-            } else {
-                let batch = try await client.dailyBatch(day: current, calendar: calendar)
-                if batch.isEmpty {
-                    emptyDays += 1
-                } else {
-                    try await watch.importBatch(batch, key: key)
-                    importedDays += 1
-                    emptyDays = 0
-                }
+    /// Starts an import of the range, in the background. Does nothing while one runs.
+    func importRange(days: Int) {
+        guard !isImporting else { return }
+        isImporting = true
+        startedAt = .now
+        progress = nil
+        summary = nil
+        errorMessage = nil
+        importTask = Task {
+            defer {
+                isImporting = false
+                importTask = nil
+                // The raw responses and the imported days go to the backend, which the import stage does not signal for
+                // responses it only archived.
+                backend.requestUpload()
             }
-            day = calendar.date(byAdding: .day, value: -1, to: current)
+            do {
+                let unit = watch.pairedWatch?.info?.unitNumber ?? 0
+                _ = try await ConnectImport.run(days: days, unit: unit, source: client, sink: watch) { self.progress = $0 }
+                summary = Task.isCancelled ? "Import cancelled." : "Import finished."
+            } catch {
+                if let connectError = error as? GarminConnectError, connectError == .notSignedIn {
+                    phase = .signedOut
+                }
+                errorMessage = error.localizedDescription
+            }
         }
-        return "Imported \(importedActivities) activities and \(importedDays) days of daily data."
     }
 
-    /// Every activity between two calendar days, in pages of 100.
-    private func listActivities(from first: Date?, to last: Date?, calendar: Calendar) async throws -> [ConnectActivity] {
-        var all: [ConnectActivity] = []
-        var start = 0
-        while true {
-            let page = try await client.activities(start: start, limit: 100, from: first, to: last, calendar: calendar)
-            all += page
-            if page.count < 100 { return all }
-            start += 100
-        }
+    func cancelImport() {
+        importTask?.cancel()
+    }
+}
+
+/// The watch's import stage as the Connect import sees it. A key is imported, checked empty, or missing.
+extension GarminWatchService: @retroactive ConnectImportSink {
+    public func importState(of key: String) async -> ConnectKeyState {
+        if await hasImported(key) { return .imported }
+        return await wasChecked(key) ? .checkedEmpty : .missing
     }
 }

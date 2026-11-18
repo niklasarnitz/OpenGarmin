@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import GarminConnect
 import GarminHealth
 import GarminSession
 import GarminTransport
@@ -11,10 +12,14 @@ final class AppEnvironment {
     let watch: any WatchService
     /// Uploads the watch's files and the Garmin Connect batches to the self-hosted backend.
     let backend: BackendSync
+    /// The Garmin Connect import. It lives here, not in its screen, so an import goes on when the user leaves the screen.
+    /// Nil when the watch is not the device service (previews).
+    let connectImport: ConnectImportModel?
 
-    init(watch: any WatchService, backend: BackendSync) {
+    init(watch: any WatchService, backend: BackendSync, connectImport: ConnectImportModel? = nil) {
         self.watch = watch
         self.backend = backend
+        self.connectImport = connectImport
     }
 
     /// The one place the real device service gets wired in. Launching with `-preview` runs the UI on
@@ -33,7 +38,9 @@ final class AppEnvironment {
         // State restoration only works when the central exists before launch finishes.
         if watch.pairedWatch != nil { GarminBluetooth.activate() }
         let backend = BackendSync(directory: store.directory)
-        let environment = AppEnvironment(watch: watch, backend: backend)
+        let raw = ConnectRawStore(directory: store.directory.appending(path: "ConnectRaw", directoryHint: .isDirectory))
+        let connectImport = ConnectImportModel(watch: watch, raw: raw, backend: backend)
+        let environment = AppEnvironment(watch: watch, backend: backend, connectImport: connectImport)
         environment.handleWatchEvents()
         CalendarSync.pushChanges(to: watch)
         WatchCommands.syncNow = { await watch.syncNow() }
