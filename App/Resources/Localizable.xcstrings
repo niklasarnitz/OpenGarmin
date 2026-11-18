@@ -1191,6 +1191,186 @@
         }
       }
     },
+    "Backend" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backend"
+          }
+        }
+      }
+    },
+    "Server URL" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server-Adresse"
+          }
+        }
+      }
+    },
+    "Email" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "E-Mail"
+          }
+        }
+      }
+    },
+    "Password" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passwort"
+          }
+        }
+      }
+    },
+    "Sign in" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anmelden"
+          }
+        }
+      }
+    },
+    "Create account" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konto anlegen"
+          }
+        }
+      }
+    },
+    "Sign out" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abmelden"
+          }
+        }
+      }
+    },
+    "Status" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Status"
+          }
+        }
+      }
+    },
+    "Account" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konto"
+          }
+        }
+      }
+    },
+    "Last upload" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Letzter Upload"
+          }
+        }
+      }
+    },
+    "Pending" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ausstehend"
+          }
+        }
+      }
+    },
+    "Uploading…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird hochgeladen…"
+          }
+        }
+      }
+    },
+    "Upload now" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jetzt hochladen"
+          }
+        }
+      }
+    },
+    "Upload to your own server" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf den eigenen Server hochladen"
+          }
+        }
+      }
+    },
+    "Sign in to your backend account. The password is not stored; the session token is kept in the Keychain." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Melde dich bei deinem Backend-Konto an. Das Passwort wird nicht gespeichert; das Sitzungs-Token liegt im Schlüsselbund."
+          }
+        }
+      }
+    },
+    "Uploaded after every import. Only what the server lacks is sent, and a failed upload is retried at the next import." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nach jedem Import hochgeladen. Es wird nur gesendet, was der Server noch nicht hat; ein fehlgeschlagener Upload wird beim nächsten Import wiederholt."
+          }
+        }
+      }
+    },
+    "Skipped" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Übersprungen"
+          }
+        }
+      }
+    },
+    "The server refused these files. They are tried again after an app update or on Upload now." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Server hat diese Dateien abgelehnt. Sie werden nach einem App-Update oder bei „Jetzt hochladen“ erneut versucht."
+          }
+        }
+      }
+    },
     "Never" : {
       "localizations" : {
         "de" : {

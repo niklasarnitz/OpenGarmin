@@ -40,6 +40,7 @@
 		95F7A59465B964DCCC8D777E /* InsightsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6573188A00AA0BAFDCCC6AC2 /* InsightsView.swift */; };
 		97F4805EF9307A4601EAF911 /* OpenGarminShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFB11636FC10B27F8EEE37FC /* OpenGarminShortcuts.swift */; };
 		A539AEFF57B554D63409BB4F /* OpenGarminApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66304C8BFAC98948490CDE1D /* OpenGarminApp.swift */; };
+		B6256A8E96E7193520CA7AD8 /* BackendView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D2CDE4B1293990503B08FA2 /* BackendView.swift */; };
 		B79D296E9E6C12F3E5AA0026 /* ActivityDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC6C608D1507F9F30D4E2644 /* ActivityDetailView.swift */; };
 		B7F3F3FBFDA8A56D86750994 /* PreviewWatchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EF7D33B4E010E9374D8A602 /* PreviewWatchService.swift */; };
 		B938F47EE351C383348A0B0C /* WatchIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = B88808D8C9794474437219CD /* WatchIntents.swift */; };
@@ -58,6 +59,7 @@
 		E26042E9EF425F2287420644 /* WatchCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB8DAEE769A765A71949614B /* WatchCommands.swift */; };
 		E6BDB58A68707B3B6C95EC63 /* EmergencyContactsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 081BC25D6EC5C3C6211D4720 /* EmergencyContactsView.swift */; };
 		E83B283ECED882AE12C70D29 /* OpenGarminWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A938A12CA0D346E1B85F7 /* OpenGarminWidgets.swift */; };
+		E8BA5D9813402A688083764F /* BackendSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BD26FF0EA1C195A310BF27 /* BackendSync.swift */; };
 		ED4B3C5F63556620D15D0D6D /* GarminKit in Frameworks */ = {isa = PBXBuildFile; productRef = 711F62CE3BA3CE0E0FA7386C /* GarminKit */; };
 		EEE5685AE75CF8352E70C697 /* WorkoutLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBF0571026501E931A8C3BF2 /* WorkoutLibrary.swift */; };
 		EFCD8FE0A1F72BE4A1717989 /* LiveSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 892F64580F9C212790DFAA60 /* LiveSync.swift */; };
@@ -119,12 +121,14 @@
 		91866E6E2AF482D3862886F9 /* SyncControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncControl.swift; sourceTree = "<group>"; };
 		9922DF75E97C458230A4D0E3 /* SyncProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncProgressView.swift; sourceTree = "<group>"; };
 		9C1522E98A9929715FDC41E6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		9D2CDE4B1293990503B08FA2 /* BackendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendView.swift; sourceTree = "<group>"; };
 		9EF7D33B4E010E9374D8A602 /* PreviewWatchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewWatchService.swift; sourceTree = "<group>"; };
 		A25BD139E87E5E47197198B6 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		A9C8C8324E78DA5D3845756E /* BackgroundSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSync.swift; sourceTree = "<group>"; };
 		B2D378DA9CDCE4CA18315C54 /* WorkoutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutsView.swift; sourceTree = "<group>"; };
 		B62DE4A421248C88377A8B81 /* WatchSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettingsView.swift; sourceTree = "<group>"; };
 		B88808D8C9794474437219CD /* WatchIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchIntents.swift; sourceTree = "<group>"; };
+		B8BD26FF0EA1C195A310BF27 /* BackendSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendSync.swift; sourceTree = "<group>"; };
 		B9FF12A4FD7037ABE451ED25 /* SyncLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncLiveActivity.swift; sourceTree = "<group>"; };
 		BA8BFAC76074941B94B4E846 /* PhoneSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSync.swift; sourceTree = "<group>"; };
 		BB8DAEE769A765A71949614B /* WatchCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchCommands.swift; sourceTree = "<group>"; };
@@ -200,6 +204,7 @@
 		2403282529733A100186909D /* Device */ = {
 			isa = PBXGroup;
 			children = (
+				9D2CDE4B1293990503B08FA2 /* BackendView.swift */,
 				15B8E20792F27FE992C2CA9C /* CalendarSettingsView.swift */,
 				E7B1B38ECED705C4375C6AFD /* ConnectImportView.swift */,
 				4D61366771DCE92B050FFAD6 /* DeviceView.swift */,
@@ -363,6 +368,7 @@
 		F8669339010289CE18B6C38A /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				B8BD26FF0EA1C195A310BF27 /* BackendSync.swift */,
 				A9C8C8324E78DA5D3845756E /* BackgroundSync.swift */,
 				1930890AA4F22521AB81AE30 /* CalendarSync.swift */,
 				1E894ACE8D830A7A3F4EC23F /* FindMyPhoneAlert.swift */,
@@ -492,6 +498,8 @@
 				B79D296E9E6C12F3E5AA0026 /* ActivityDetailView.swift in Sources */,
 				235E5CD538A509AC11845775 /* ActivityExport.swift in Sources */,
 				D9594E3ABFAED63AE7EA9C88 /* AppEnvironment.swift in Sources */,
+				E8BA5D9813402A688083764F /* BackendSync.swift in Sources */,
+				B6256A8E96E7193520CA7AD8 /* BackendView.swift in Sources */,
 				2BDDCB0AB6C32E34A015B5E1 /* BackgroundSync.swift in Sources */,
 				57BE5B1CC60B7303C1D7A8C8 /* CalendarSettingsView.swift in Sources */,
 				80BA2EAB50DAD6428E826BD4 /* CalendarSync.swift in Sources */,
