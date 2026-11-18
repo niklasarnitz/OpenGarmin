@@ -34,7 +34,7 @@ public final class SessionStore {
 
     private static let pairedWatchKey = "garmin.pairedWatch"
 
-    private let directory: URL
+    public let directory: URL
     private let defaults: UserDefaults
     private let calendar: Calendar
     private var snapshot: Snapshot

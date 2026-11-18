@@ -31,6 +31,7 @@ struct DeviceView: View {
                 connection(watch)
                 features
                 notifications(watch)
+                satelliteData
                 information(watch)
                 Button("Forget watch", systemImage: "trash", role: .destructive) { confirmForget = true }
                     .buttonStyle(.glass)
@@ -157,6 +158,44 @@ struct DeviceView: View {
         switch state {
         case .connected, .syncing: true
         default: false
+        }
+    }
+
+    /// The AGPS files the watch takes from the phone: each one's source, status and last download, and a refresh.
+    @ViewBuilder
+    private var satelliteData: some View {
+        if let service = app.watch as? GarminWatchService {
+            MetricTile("GPS satellite data", symbol: "location.fill", tint: Palette.amber) {
+                ForEach(service.agps.entries) { entry in
+                    VStack(alignment: .leading, spacing: 6) {
+                        LabeledContent(entry.type.title, value: Self.agpsStatusText(entry.status))
+                        LabeledContent("Last update", value: Formatting.lastSeen(entry.updatedAt))
+                        TextField("Source URL", text: Binding(
+                            get: { entry.url?.absoluteString ?? "" },
+                            set: { service.agps.setURL(URL(string: $0), for: entry.type) }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                        .font(.footnote)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    }
+                }
+                Button("Refresh", systemImage: "arrow.clockwise") {
+                    Task { await service.agps.refresh(force: true) }
+                }
+                .buttonStyle(.glass)
+                .disabled(service.agps.isRefreshing)
+            }
+        }
+    }
+
+    private static func agpsStatusText(_ status: AGPSStatus) -> String {
+        switch status {
+        case .missing: "Missing"
+        case .current: "Current"
+        case .expired: "Expired"
+        case let .failed(message): message
         }
     }
 

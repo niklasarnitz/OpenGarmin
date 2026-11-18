@@ -41,6 +41,7 @@ final class GFDISession {
     /// The catalog's choice for this model. nil when the catalog does not know the model.
     private let newSyncProtocol: Bool?
     private let weatherProvider: (@MainActor () async -> WeatherReport?)?
+    private let http: WatchHTTPService
     let output: @MainActor (GFDISessionOutput) -> Void
 
     private var deviceInfo: DeviceInfo?
@@ -99,9 +100,11 @@ final class GFDISession {
     }
 
     /// - Parameter newSyncProtocol: whether the new sync protocol is used. nil decides from the watch's capabilities.
+    /// - Parameter agps: answers the watch's AGPS requests. nil answers none.
     init(link: any GarminServiceLink, store: SessionStore, capabilities: Set<GarminCapability>, phoneName: String,
          newSyncProtocol: Bool? = nil,
          weatherProvider: (@MainActor () async -> WeatherReport?)?,
+         agps: AGPSCache? = nil,
          output: @escaping @MainActor (GFDISessionOutput) -> Void) {
         self.link = link
         self.store = store
@@ -109,6 +112,7 @@ final class GFDISession {
         self.phoneName = phoneName
         self.newSyncProtocol = newSyncProtocol
         self.weatherProvider = weatherProvider
+        self.http = WatchHTTPService(agps: agps)
         self.output = output
     }
 
@@ -651,6 +655,9 @@ final class GFDISession {
         }
         if smart.hasFileAccessService {
             await receiveFileAccess(smart.fileAccessService, requestID: chunk.requestID)
+        }
+        if let reply = http.reply(to: smart) {
+            await sendProtobufResponse(reply, requestID: chunk.requestID)
         }
     }
 
