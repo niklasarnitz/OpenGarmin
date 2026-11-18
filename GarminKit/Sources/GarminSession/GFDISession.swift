@@ -31,11 +31,15 @@ final class GFDISession {
 
     private static let defaultMaxPacketSize = 375
     private static let uploadTimeout: Duration = .seconds(120)
+    /// FIT file types (the directory entry's sub type, or the FIT_TYPE_ item type): 4 is an activity. Only activities
+    /// count towards the sync notification.
+    private static let activityFileType: UInt8 = 4
+    private static let activityItemType = "FIT_TYPE_4"
 
     private typealias Item = GDI_Proto_FileAccess_ItemReference
 
     private let link: any GarminServiceLink
-    private let store: SessionStore
+    private let importer: FITImporter
     private let capabilities: Set<GarminCapability>
     private let phoneName: String
     /// The catalog's choice for this model. nil when the catalog does not know the model.
@@ -99,15 +103,16 @@ final class GFDISession {
         let continuation: CheckedContinuation<Void, Error>
     }
 
+    /// - Parameter importer: the import stage that keeps the downloaded files. It outlives the session.
     /// - Parameter newSyncProtocol: whether the new sync protocol is used. nil decides from the watch's capabilities.
     /// - Parameter agps: answers the watch's AGPS requests. nil answers none.
-    init(link: any GarminServiceLink, store: SessionStore, capabilities: Set<GarminCapability>, phoneName: String,
+    init(link: any GarminServiceLink, importer: FITImporter, capabilities: Set<GarminCapability>, phoneName: String,
          newSyncProtocol: Bool? = nil,
          weatherProvider: (@MainActor () async -> WeatherReport?)?,
          agps: AGPSCache? = nil,
          output: @escaping @MainActor (GFDISessionOutput) -> Void) {
         self.link = link
-        self.store = store
+        self.importer = importer
         self.capabilities = capabilities
         self.phoneName = phoneName
         self.newSyncProtocol = newSyncProtocol
@@ -325,7 +330,10 @@ final class GFDISession {
         download = nil
         let bytes = Data(finished.data.prefix(size))
         if let file = finished.file {
-            if importFile(key(file), bytes: bytes) { await archive(file) }
+            if await keep(key(file), bytes: bytes) {
+                if file.subType == Self.activityFileType { syncedActivities += 1 }
+                await archive(file)
+            }
         } else {
             let files = Self.directoryEntries(bytes).filter { $0.isFIT }
             pending += files
@@ -340,7 +348,7 @@ final class GFDISession {
         while !pending.isEmpty {
             let file = pending.removeFirst()
             syncDone += 1
-            if store.isImported(key(file)) {
+            if await importer.isKnown(key(file)) {
                 await archive(file)
                 continue
             }
@@ -352,26 +360,16 @@ final class GFDISession {
         await finishSync()
     }
 
-    /// Imports one FIT file. Returns whether the watch may release it: a file that does not decode is recorded as
-    /// imported, so it is not fetched again, while a file that cannot be stored stays on the watch for the next sync.
-    private func importFile(_ key: String, bytes: Data) -> Bool {
-        let batch: HealthBatch
+    /// Hands a downloaded file to the import stage. True once the file is in the inbox, which is when the watch may
+    /// archive it. A file that could not be kept stays on the watch for the next sync.
+    private func keep(_ key: String, bytes: Data) async -> Bool {
         do {
-            batch = FitExtractor.extract(try FitDecoder.decode(bytes), unitNumber: deviceInfo?.unitNumber)
-        } catch {
-            output(.event(.log("Skipped FIT file \(key): \(error)")))
-            try? store.markImported(key)
+            try await importer.accept(bytes, fileKey: key)
             return true
-        }
-        do {
-            try store.record(batch, fileKey: key, fit: bytes)
         } catch {
-            output(.event(.log("Could not store FIT file \(key): \(error)")))
+            output(.event(.log("Could not keep FIT file \(key): \(error)")))
             return false
         }
-        syncedActivities += batch.activities.count
-        output(.event(.healthBatchImported(batch)))
-        return true
     }
 
     private func finishSync() async {
@@ -480,7 +478,7 @@ final class GFDISession {
         while !pendingItems.isEmpty {
             let item = pendingItems.removeFirst()
             syncDone += 1
-            if store.isImported(itemKey(item)) {
+            if await importer.isKnown(itemKey(item)) {
                 await markSynced(item)
                 continue
             }
@@ -508,7 +506,8 @@ final class GFDISession {
     private func fetchCurrent(_ item: Item, handle: UInt32) async {
         let bytes = try? await transfer(handle: handle)
         guard !Task.isCancelled else { return }
-        if let bytes, importFile(itemKey(item), bytes: bytes) {
+        if let bytes, await keep(itemKey(item), bytes: bytes) {
+            if item.dataType.gdxmlString == Self.activityItemType { syncedActivities += 1 }
             await markSynced(item)
         }
         currentItem = nil

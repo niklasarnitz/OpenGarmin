@@ -10,7 +10,7 @@ public enum HealthKitWriterError: Error, Equatable {
 
 /// What one `save` wrote, and what it had to leave out.
 public struct SaveSummary: Sendable, Equatable {
-    /// Samples written per HealthBatch field, e.g. "heartRate" or "steps". Sleep sessions are counted separately.
+    /// Samples written per HealthBatch field, e.g. "heartRate" or "steps". Sleep stages are counted under "sleep".
     public var samplesWritten: [String: Int] = [:]
     public var sleepSessionsWritten = 0
     public var workoutsWritten = 0
@@ -36,43 +36,20 @@ public actor HealthKitWriter {
         try await store.requestAuthorization(toShare: Self.writeTypes, read: Self.readTypes)
     }
 
+    /// Saves a batch with one HealthKit call for all its samples, then one workout per activity. Callers save batches
+    /// one after another, so two saves never run at the same time. Sync identifiers keep a batch that is saved again
+    /// from duplicating its samples.
     public func save(_ batch: HealthBatch, deviceName: String, deviceModel: String, firmware: String) async throws -> SaveSummary {
         let device = HKDevice(name: deviceName, manufacturer: "Garmin", model: deviceModel, hardwareVersion: nil,
                               firmwareVersion: firmware, softwareVersion: nil, localIdentifier: nil,
                               udiDeviceIdentifier: nil)
         var summary = SaveSummary()
-        var objects: [HKObject] = []
-
-        func add(_ field: String, _ samples: [HKSample]) {
-            objects += samples
-            summary.samplesWritten[field, default: 0] += samples.count
-        }
-
-        let bpm = HKUnit.count().unitDivided(by: .minute())
-        add("heartRate", batch.heartRate.map { quantity(.heartRate, bpm, Double($0.bpm), at: $0.date, $0.date, device) })
-        add("restingHeartRate", point(batch.restingHeartRate, .restingHeartRate, bpm, device))
-        add("steps", interval(batch.steps, .stepCount, .count(), device))
-        add("activeEnergyKcal", interval(batch.activeEnergyKcal, .activeEnergyBurned, .kilocalorie(), device))
-        add("restingEnergyKcal", interval(batch.restingEnergyKcal, .basalEnergyBurned, .kilocalorie(), device))
-        add("distance", interval(batch.distance, .distanceWalkingRunning, .meter(), device))
-        add("floorsClimbed", interval(batch.floorsClimbed, .flightsClimbed, .count(), device))
-        add("intensityMinutes", interval(batch.intensityMinutes, .appleExerciseTime, .minute(), device))
-        add("spo2", point(batch.spo2, .oxygenSaturation, .percent(), device))
-        add("respirationRate", point(batch.respirationRate, .respiratoryRate, bpm, device))
-        // Garmin's HRV is RMSSD, but HealthKit's only HRV type is SDNN. The values are stored as SDNN anyway,
-        // so the Health app shows them as a trend rather than as a clinical SDNN reading.
-        add("hrv", point(batch.hrv, .heartRateVariabilitySDNN, .secondUnit(with: .milli), device))
+        let groups = HealthKitMapping.samples(for: batch, device: device)
+        for group in groups { summary.samplesWritten[group.field] = group.samples.count }
+        summary.sleepSessionsWritten = batch.sleep.count
         if !batch.stress.isEmpty { summary.skipped.append("stress: no HealthKit type") }
         if !batch.bodyBattery.isEmpty { summary.skipped.append("bodyBattery: no HealthKit type") }
-
-        for session in batch.sleep {
-            objects.append(sleepSample(HKCategoryValueSleepAnalysis.inBed, session.start, session.end, device))
-            for interval in session.intervals {
-                objects.append(sleepSample(HealthKitMapping.sleepValue(for: interval.stage), interval.start, interval.end, device))
-            }
-            summary.sleepSessionsWritten += 1
-        }
-        try await store.save(objects)
+        try await store.save(groups.flatMap(\.samples))
 
         #if os(iOS)
         for activity in batch.activities {
@@ -117,31 +94,6 @@ public actor HealthKitWriter {
         HKQuantityType(.height), HKQuantityType(.bodyMass),
     ]
 
-    private func quantity(_ id: HKQuantityTypeIdentifier, _ unit: HKUnit, _ value: Double,
-                          at start: Date, _ end: Date, _ device: HKDevice) -> HKQuantitySample {
-        HKQuantitySample(type: HKQuantityType(id), quantity: HKQuantity(unit: unit, doubleValue: value),
-                         start: start, end: end, device: device,
-                         metadata: syncMetadata(HealthKitMapping.syncIdentifier(id.rawValue, HealthKitMapping.epochMillis(start), HealthKitMapping.epochMillis(end))))
-    }
-
-    private func point(_ samples: [PointSample], _ id: HKQuantityTypeIdentifier, _ unit: HKUnit, _ device: HKDevice) -> [HKSample] {
-        samples.map { quantity(id, unit, $0.value, at: $0.date, $0.date, device) }
-    }
-
-    private func interval(_ samples: [IntervalSample], _ id: HKQuantityTypeIdentifier, _ unit: HKUnit, _ device: HKDevice) -> [HKSample] {
-        samples.map { quantity(id, unit, $0.value, at: $0.start, $0.end, device) }
-    }
-
-    private func sleepSample(_ value: HKCategoryValueSleepAnalysis, _ start: Date, _ end: Date, _ device: HKDevice) -> HKCategorySample {
-        HKCategorySample(type: HKCategoryType(.sleepAnalysis), value: value.rawValue, start: start, end: end,
-                         device: device,
-                         metadata: syncMetadata(HealthKitMapping.syncIdentifier("sleep", HealthKitMapping.epochMillis(start), HealthKitMapping.epochMillis(end), String(value.rawValue))))
-    }
-
-    private func syncMetadata(_ identifier: String) -> [String: Any] {
-        [HKMetadataKeySyncIdentifier: identifier, HKMetadataKeySyncVersion: HealthKitMapping.syncVersion]
-    }
-
     private func latest(_ id: HKQuantityTypeIdentifier, unit: HKUnit) async -> Double? {
         let descriptor = HKSampleQueryDescriptor(predicates: [.quantitySample(type: HKQuantityType(id))],
                                                  sortDescriptors: [SortDescriptor(\.endDate, order: .reverse)], limit: 1)
@@ -159,10 +111,11 @@ public actor HealthKitWriter {
         let identifier = HealthKitMapping.syncIdentifier("activity", activity.id)
         let builder = HKWorkoutBuilder(healthStore: store, configuration: configuration, device: device)
         try await builder.beginCollection(at: activity.start)
-        try await builder.addMetadata(syncMetadata(identifier))
+        try await builder.addMetadata(HealthKitMapping.syncMetadata(identifier))
         let heartRates = activity.records.compactMap { record -> HKQuantitySample? in
             guard let bpm = record.heartRate, record.date >= activity.start, record.date <= activity.end else { return nil }
-            return quantity(.heartRate, .count().unitDivided(by: .minute()), Double(bpm), at: record.date, record.date, device)
+            return HealthKitMapping.quantity(.heartRate, .count().unitDivided(by: .minute()), Double(bpm),
+                                             at: record.date, record.date, device)
         }
         if !heartRates.isEmpty { try await builder.addSamples(heartRates) }
         try await builder.endCollection(at: activity.end)
@@ -178,7 +131,7 @@ public actor HealthKitWriter {
         }
         let routeBuilder = HKWorkoutRouteBuilder(healthStore: store, device: device)
         try await routeBuilder.insertRouteData(locations)
-        _ = try await routeBuilder.finishRoute(with: workout, metadata: syncMetadata(identifier + ".route"))
+        _ = try await routeBuilder.finishRoute(with: workout, metadata: HealthKitMapping.syncMetadata(identifier + ".route"))
     }
     #endif
 }

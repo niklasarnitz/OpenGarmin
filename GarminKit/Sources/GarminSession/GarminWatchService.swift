@@ -42,6 +42,10 @@ public final class GarminWatchService: WatchService {
 
     @ObservationIgnored private let eventSink: AsyncStream<WatchEvent>.Continuation
     @ObservationIgnored private let store: SessionStore
+    /// The import stage: turns the downloaded files into history, off the main actor.
+    @ObservationIgnored private let importer: FITImporter
+    /// Whether the import stage is running. It can outlive the watch's sync.
+    @ObservationIgnored private var importing = false
     @ObservationIgnored private let phoneName: String
     @ObservationIgnored private let weatherProvider: (@MainActor () async -> WeatherReport?)?
     @ObservationIgnored private let calendarProvider: (@MainActor () async -> [CalendarEvent])?
@@ -54,6 +58,9 @@ public final class GarminWatchService: WatchService {
     @ObservationIgnored private var reconnectAttempts = 0
     @ObservationIgnored private var scanner: GarminScanner?
     @ObservationIgnored private var scanTask: Task<Void, Never>?
+
+    /// Shown after the watch's sync ends while the import stage still saves the files.
+    private static let savingState = WatchConnectionState.syncing(progress: 1, detail: "Saving…")
 
     /// - Parameters:
     ///   - weather: supplies the forecast when the watch asks for it.
@@ -73,10 +80,18 @@ public final class GarminWatchService: WatchService {
         weatherProvider = weather
         calendarProvider = calendar
         self.makeLink = makeLink
-        latest = store.history
+        let history = HistoryStore(directory: store.directory)
+        latest = history.history
+        let (importEvents, importSink) = AsyncStream.makeStream(of: FITImporter.Event.self)
+        importer = FITImporter(history: history, report: { importSink.yield($0) })
         let paired = store.pairedWatch
         pairedWatch = paired
         state = paired == nil ? .noWatchPaired : .disconnected(lastSeen: paired?.lastSync)
+        Task { [weak self] in
+            for await event in importEvents { self?.handleImport(event) }
+        }
+        // Files that were downloaded but not imported before the app stopped are imported now.
+        Task { await self.importer.start() }
         if paired != nil { startConnection() }
     }
 
@@ -226,7 +241,7 @@ public final class GarminWatchService: WatchService {
         // The catalog says whether Gadgetbridge uses the new sync protocol for this model. Unknown models
         // (nil) decide from the watch's capabilities instead.
         let newSync = GarminDeviceCatalog.all.first(where: { $0.id == pairedWatch?.catalogID })?.usesNewSyncProtocol
-        return GFDISession(link: link, store: store, capabilities: GFDISession.phoneCapabilities,
+        return GFDISession(link: link, importer: importer, capabilities: GFDISession.phoneCapabilities,
                            phoneName: phoneName, newSyncProtocol: newSync, weatherProvider: weatherProvider,
                            agps: agps) { [weak self] output in
             guard let self, current == self.generation else { return }
@@ -290,11 +305,26 @@ public final class GarminWatchService: WatchService {
                 watch.lastSync = .now
                 setPairedWatch(watch)
             }
-            state = .connected
+            state = importing ? Self.savingState : .connected
         case let .event(event):
             if case let .battery(status) = event { battery = status }
-            if case .healthBatchImported = event { latest = store.history }
             eventSink.yield(event)
+        }
+    }
+
+    /// Import-stage events. Each imported batch goes to the app as one `healthBatchImported`, which it saves to Health.
+    private func handleImport(_ event: FITImporter.Event) {
+        switch event {
+        case .started:
+            importing = true
+        case let .imported(batch, history):
+            latest = history
+            eventSink.yield(.healthBatchImported(batch))
+        case .finished:
+            importing = false
+            if state == Self.savingState { state = .connected }
+        case let .log(message):
+            eventSink.yield(.log(message))
         }
     }
 }

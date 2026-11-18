@@ -78,7 +78,7 @@ private func makeSession(link: FakeLink, agps: AGPSCache) throws -> GFDISession 
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     let defaults = UserDefaults(suiteName: UUID().uuidString)!
     let store = try SessionStore(directory: directory, defaults: defaults)
-    return GFDISession(link: link, store: store, capabilities: [], phoneName: "iPhone",
+    return GFDISession(link: link, importer: makeImporter(store), capabilities: [], phoneName: "iPhone",
                        weatherProvider: nil, agps: agps) { _ in }
 }
 

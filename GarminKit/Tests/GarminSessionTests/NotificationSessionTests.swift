@@ -10,7 +10,7 @@ private func notificationSession(_ link: FakeLink, output: @escaping @MainActor 
     -> (session: GFDISession, pump: Task<Void, Never>) {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     let store = try! SessionStore(directory: directory, defaults: UserDefaults(suiteName: UUID().uuidString)!)
-    let session = GFDISession(link: link, store: store, capabilities: [], phoneName: "iPhone",
+    let session = GFDISession(link: link, importer: makeImporter(store), capabilities: [], phoneName: "iPhone",
                               weatherProvider: nil, output: output)
     let pump = Task { for await frame in link.incomingFrames { await session.receive(frame) } }
     return (session, pump)

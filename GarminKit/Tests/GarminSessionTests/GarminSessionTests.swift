@@ -137,8 +137,8 @@ private func directoryEntry(index: UInt16, dataType: UInt8, subType: UInt8, size
 
 /// Two monitoring records 60 s apart with a 50-step increase: one FIT file, one step interval.
 /// The records are recent, because the store drops samples older than its retention period.
-private func activityFIT() -> Data {
-    let start = Int64(GarminTime.garminSeconds(from: .now)) - 3600
+private func activityFIT(ageSeconds: Int64) -> Data {
+    let start = Int64(GarminTime.garminSeconds(from: .now)) - ageSeconds
     return FitEncoder.encodeFile([
         FitEncodeMessage(globalNumber: 55, fields: [
             FitEncodeField(253, .uint32, .int(start)), FitEncodeField(5, .enumeration, .int(1)),
@@ -191,15 +191,54 @@ private let deviceInformationAck: [UInt8] = [
     #expect(sent[3...10].map(\.messageType) == [5031, 5026, 5030, 5030, 5043, 5030, 5030, 5030])
 }
 
+/// The import stage over a store's directory. The events it reports are collected on the main actor for the test.
 @MainActor
-@Test func directorySyncDownloadsNewFITFilesAndArchivesThem() async throws {
-    let store = try makeStore()
-    let link = FakeLink()
-    let fit = activityFIT()
-    let listing = directoryEntry(index: 7, dataType: 128, subType: 4, size: fit.count, timestamp: 1000)
-        + directoryEntry(index: 9, dataType: 255, subType: 245, size: 10, timestamp: 1000) // not a FIT file
-    let files: [UInt16: Data] = [0: listing, 7: fit]
-    link.reply = { frame in
+final class ImportLog {
+    private(set) var events: [FITImporter.Event] = []
+    let importer: FITImporter
+
+    init(store: SessionStore, beforeImport: @escaping @Sendable () async -> Void = {}) {
+        let (stream, sink) = AsyncStream.makeStream(of: FITImporter.Event.self)
+        importer = FITImporter(history: HistoryStore(directory: store.directory), report: { sink.yield($0) },
+                               beforeImport: beforeImport)
+        Task { for await event in stream { self.events.append(event) } }
+    }
+
+    var imported: [HealthBatch] {
+        events.compactMap { event in
+            if case let .imported(batch, _) = event { return batch }
+            return nil
+        }
+    }
+
+    /// The retained history after the last import.
+    var history: HealthBatch {
+        var latest = HealthBatch()
+        for case let .imported(_, history) in events { latest = history }
+        return latest
+    }
+
+    var finishes: Int {
+        events.filter { if case .finished = $0 { true } else { false } }.count
+    }
+}
+
+/// An import stage over a store's directory that reports nothing.
+@MainActor
+func makeImporter(_ store: SessionStore) -> FITImporter {
+    FITImporter(history: HistoryStore(directory: store.directory), report: { _ in })
+}
+
+/// The files waiting in the store's inbox.
+@MainActor
+func inboxCount(_ store: SessionStore) -> Int {
+    HistoryStore(directory: store.directory).pendingFiles().count
+}
+
+/// Answers each download request with the file at its index, as the watch does.
+@MainActor
+private func serveDownloads(_ files: [UInt16: Data]) -> @MainActor (GFDIFrame) -> [GFDIFrame] {
+    { frame in
         guard frame.messageType == GFDIMessageID.downloadRequest.rawValue else { return [] }
         let data = files[fileIndex(frame)] ?? Data()
         return [
@@ -207,22 +246,29 @@ private let deviceInformationAck: [UInt8] = [
             GFDIFileTransferData(crc: 0, dataOffset: 0, data: data).frame(),
         ]
     }
+}
+
+@MainActor
+@Test func directorySyncDownloadsNewFITFilesAndArchivesThem() async throws {
+    let store = try makeStore()
+    let link = FakeLink()
+    let fit = activityFIT(ageSeconds: 3600)
+    let listing = directoryEntry(index: 7, dataType: 128, subType: 4, size: fit.count, timestamp: 1000)
+        + directoryEntry(index: 9, dataType: 255, subType: 245, size: 10, timestamp: 1000) // not a FIT file
+    link.reply = serveDownloads([0: listing, 7: fit])
 
     var outputs: [GFDISessionOutput] = []
-    let session = GFDISession(link: link, store: store, capabilities: [], phoneName: "iPhone",
+    let log = ImportLog(store: store)
+    let session = GFDISession(link: link, importer: log.importer, capabilities: [], phoneName: "iPhone",
                               weatherProvider: nil) { outputs.append($0) }
     let pump = Task { for await frame in link.incomingFrames { await session.receive(frame) } }
     defer { pump.cancel() }
 
     await session.requestSync()
-    try await waitUntil { outputs.syncFinishes == 1 }
+    try await waitUntil { outputs.syncFinishes == 1 && log.finishes == 1 }
 
-    let imported = outputs.compactMap { output -> HealthBatch? in
-        if case let .event(.healthBatchImported(batch)) = output { return batch }
-        return nil
-    }
-    #expect(imported.map { $0.steps.map(\.value) } == [[50]])
-    #expect(store.history.steps.map(\.value) == [50])
+    #expect(log.imported.map { $0.steps.map(\.value) } == [[50]])
+    #expect(log.history.steps.map(\.value) == [50])
     // The listing is requested, then only the FIT file, never the non-FIT entry.
     #expect(link.framesSent(of: .downloadRequest).map(fileIndex) == [0, 7])
     // The FIT file is archived on the watch: file index 7, flags ARCHIVE (0x10).
@@ -232,7 +278,86 @@ private let deviceInformationAck: [UInt8] = [
     await session.requestSync()
     try await waitUntil { outputs.syncFinishes == 2 }
     #expect(link.framesSent(of: .downloadRequest).map(fileIndex) == [0, 7, 0])
-    #expect(outputs.filter { if case .event(.healthBatchImported) = $0 { true } else { false } }.count == 1)
+    #expect(log.imported.count == 1)
+}
+
+@MainActor
+@Test func downloadsContinueWhileTheImportStageIsHeld() async throws {
+    let store = try makeStore()
+    let link = FakeLink()
+    let first = activityFIT(ageSeconds: 3600)
+    let second = activityFIT(ageSeconds: 7200)
+    let listing = directoryEntry(index: 7, dataType: 128, subType: 4, size: first.count, timestamp: 1000)
+        + directoryEntry(index: 8, dataType: 128, subType: 4, size: second.count, timestamp: 2000)
+    let serve = serveDownloads([0: listing, 7: first, 8: second])
+    var inboxAtArchive: [Int] = []
+    link.reply = { frame in
+        guard frame.messageType == GFDIMessageID.setFileFlag.rawValue else { return serve(frame) }
+        inboxAtArchive.append(inboxCount(store))
+        return []
+    }
+
+    // The import stage waits at the gate until the test opens it, so the watch's sync runs ahead of it.
+    let (gateStream, gate) = AsyncStream.makeStream(of: Void.self)
+    let log = ImportLog(store: store, beforeImport: { for await _ in gateStream { break } })
+    var outputs: [GFDISessionOutput] = []
+    let session = GFDISession(link: link, importer: log.importer, capabilities: [], phoneName: "iPhone",
+                              weatherProvider: nil) { outputs.append($0) }
+    let pump = Task { for await frame in link.incomingFrames { await session.receive(frame) } }
+    defer { pump.cancel() }
+
+    await session.requestSync()
+    try await waitUntil { outputs.syncFinishes == 1 }
+    // Both files were downloaded and archived while the import had not run.
+    #expect(log.imported.isEmpty)
+    #expect(link.framesSent(of: .setFileFlag).count == 2)
+    // Each file was already in the inbox when the watch released it.
+    #expect(inboxAtArchive == [1, 2])
+
+    gate.yield(())
+    try await waitUntil { log.finishes == 1 }
+    // The held files are imported as one batch, and they leave the inbox.
+    #expect(log.imported.count == 1)
+    #expect(log.history.steps.count == 2)
+    #expect(inboxCount(store) == 0)
+}
+
+@MainActor
+@Test func pendingFilesImportAsOneBatchWithOneWriteAndOneEvent() async throws {
+    let store = try makeStore()
+    let inbox = HistoryStore(directory: store.directory)
+    for (index, age) in [Int64(3600), 7200, 10800].enumerated() {
+        try inbox.writeToInbox(activityFIT(ageSeconds: age), fileKey: "0-\(index)-1000-\(index)")
+    }
+
+    let log = ImportLog(store: store)
+    await log.importer.start()
+    try await waitUntil { log.finishes == 1 }
+
+    #expect(log.imported.count == 1)
+    #expect(log.history.steps.count == 3)
+    let writes = await log.importer.snapshotWrites
+    #expect(writes == 1)
+    #expect(inboxCount(store) == 0)
+}
+
+@MainActor
+@Test func inboxFilesLeftByAStoppedAppAreImportedOnRestart() async throws {
+    let store = try makeStore()
+    // The app stopped after the downloads and before the import ran, so the files are still in the inbox.
+    let inbox = HistoryStore(directory: store.directory)
+    try inbox.writeToInbox(activityFIT(ageSeconds: 3600), fileKey: "0-7-1000-100")
+    try inbox.writeToInbox(Data([1, 2, 3]), fileKey: "0-8-2000-3") // does not decode
+
+    let log = ImportLog(store: store)
+    await log.importer.start()
+    try await waitUntil { log.finishes == 1 }
+
+    #expect(log.imported.map { $0.steps.map(\.value) } == [[50]])
+    #expect(inboxCount(store) == 0)
+    // The file that does not decode is recorded as imported, so it is not taken again.
+    let known = await log.importer.isKnown("0-8-2000-3")
+    #expect(known)
 }
 
 @MainActor
@@ -258,7 +383,7 @@ private let deviceInformationAck: [UInt8] = [
         }
     }
 
-    let session = GFDISession(link: link, store: store, capabilities: [], phoneName: "iPhone",
+    let session = GFDISession(link: link, importer: makeImporter(store), capabilities: [], phoneName: "iPhone",
                               weatherProvider: nil) { _ in }
     let pump = Task { for await frame in link.incomingFrames { await session.receive(frame) } }
     defer { pump.cancel() }
@@ -297,7 +422,7 @@ private func protobufResponse(_ smart: GarminVivomovehr_Smart) -> GFDIFrame {
 @Test func newSyncListsPullsAndMarksFITFilesSynced() async throws {
     let store = try makeStore()
     let link = FakeLink()
-    let fit = activityFIT()
+    let fit = activityFIT(ageSeconds: 3600)
     var uid = GDI_Proto_DataTypes_UUID()
     uid.mostSignificant = 0x1111
     uid.leastSignificant = 0x2222
@@ -336,13 +461,14 @@ private func protobufResponse(_ smart: GarminVivomovehr_Smart) -> GFDIFrame {
     }
 
     var outputs: [GFDISessionOutput] = []
-    let session = GFDISession(link: link, store: store, capabilities: [], phoneName: "iPhone",
+    let log = ImportLog(store: store)
+    let session = GFDISession(link: link, importer: log.importer, capabilities: [], phoneName: "iPhone",
                               newSyncProtocol: true, weatherProvider: nil) { outputs.append($0) }
     let pump = Task { for await frame in link.incomingFrames { await session.receive(frame) } }
     defer { pump.cancel() }
 
     await session.requestSync()
-    try await waitUntil { outputs.syncFinishes == 1 }
+    try await waitUntil { outputs.syncFinishes == 1 && log.finishes == 1 }
 
     // The phone asks for the list, pulls the file, and marks it synced, with exactly these requests.
     var synced = GDI_Proto_DataTypes_UUID()
@@ -381,12 +507,8 @@ private func protobufResponse(_ smart: GarminVivomovehr_Smart) -> GFDIFrame {
     #expect(link.transfers.map(\.requests) == [[Data([0, 0, 5, 0, 0, 0])]])
     #expect(link.framesSent(of: .downloadRequest).isEmpty)
 
-    let imported = outputs.compactMap { output -> HealthBatch? in
-        if case let .event(.healthBatchImported(batch)) = output { return batch }
-        return nil
-    }
-    #expect(imported.map { $0.steps.map(\.value) } == [[50]])
-    #expect(store.history.steps.map(\.value) == [50])
+    #expect(log.imported.map { $0.steps.map(\.value) } == [[50]])
+    #expect(log.history.steps.map(\.value) == [50])
 }
 
 /// The profile below as a settings file, with time_created 1800000000 (Unix). Derived by hand from Gadgetbridge's
@@ -423,7 +545,7 @@ private func acceptsUpload(_ frame: GFDIFrame) -> [GFDIFrame] {
     let store = try makeStore()
     let link = FakeLink()
     link.reply = acceptsUpload
-    let session = GFDISession(link: link, store: store, capabilities: [], phoneName: "iPhone",
+    let session = GFDISession(link: link, importer: makeImporter(store), capabilities: [], phoneName: "iPhone",
                               weatherProvider: nil) { _ in }
     let pump = Task { for await frame in link.incomingFrames { await session.receive(frame) } }
     defer { pump.cancel() }
