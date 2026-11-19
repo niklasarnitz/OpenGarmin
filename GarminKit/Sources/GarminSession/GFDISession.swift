@@ -777,14 +777,29 @@ final class GFDISession {
     }
 
     private func receiveProtobuf(_ chunk: GFDIProtobufChunk, ack: GFDIResponse) async {
-        await send(ack)
+        // A whole message is acknowledged once it is known whether this app handles it (below).
+        if !chunk.isComplete { await send(ack) }
         let complete: Data?
         do {
             complete = try reassembler.accept(chunk)
         } catch {
             return
         }
-        guard let bytes = complete, let smart = try? GarminVivomovehr_Smart(serializedBytes: bytes) else { return }
+        guard let bytes = complete, let smart = try? GarminVivomovehr_Smart(serializedBytes: bytes) else {
+            if chunk.isComplete { await send(ack) }
+            return
+        }
+        // As Gadgetbridge: a request for a service this app does not implement is acknowledged as discarded with
+        // UNKNOWN_REQUEST_ID, so the watch does not wait for an answer that never comes.
+        let handled = smart.hasCalendarEventsService || smart.hasDeviceStatusService || smart.hasFileAccessService
+            || smart.hasRealtimeSettingsService || smart.hasConnectIqInstalledAppsService || smart.hasConnectIqHTTPService || smart.hasDataTransferService
+            || smart.hasCoreService || smart.hasFindMyWatchService
+        if handled || !chunk.isComplete {
+            if chunk.isComplete { await send(ack) }
+        } else if let type = GFDIMessageID(rawValue: ack.originalType) {
+            await send(GFDIProtobufStatus(originalType: type, status: .ack, requestID: chunk.requestID,
+                                          dataOffset: chunk.dataOffset, chunk: .discarded, code: .unknownRequestID).response)
+        }
         // The service names only (the first line of each field), so the log shows what the watch asks for.
         let services = smart.textFormatString().split(separator: "\n").filter { !$0.hasPrefix(" ") }.joined(separator: ",")
         SyncDiagnostics.log("protobuf in id=\(chunk.requestID) \(services)")
