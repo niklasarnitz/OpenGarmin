@@ -202,9 +202,11 @@ final class GFDISession {
         case let message as GFDICreateFileStatus:
             await receiveCreateFileStatus(message)
         case let message as GFDIFindMyPhoneRequest:
+            SyncDiagnostics.log("find my phone request duration=\(message.duration)")
             await send(message.acknowledgement())
             output(.event(.findMyPhone(started: true, seconds: Int(message.duration))))
         case let message as GFDIFindMyPhoneCancel:
+            SyncDiagnostics.log("find my phone cancel")
             await send(message.acknowledgement())
             output(.event(.findMyPhone(started: false, seconds: 0)))
         case let message as GFDIWeatherRequest:
@@ -231,6 +233,13 @@ final class GFDISession {
             await receiveProtobuf(message.chunk, ack: message.acknowledgement())
         case let message as GFDIProtobufResponse:
             await receiveProtobuf(message.chunk, ack: message.acknowledgement())
+        case let message as GFDIUnhandled:
+            SyncDiagnostics.log("unhandled message \(message.messageType) bytes=\(message.payload.count)")
+            // As Gadgetbridge: every request gets an answer, so the watch does not wait on the app. A response frame
+            // that failed to decode is not answered.
+            if message.messageType != GFDIMessageID.response.rawValue {
+                await send(GFDIResponse(originalType: message.messageType, status: .unsupported))
+            }
         default:
             break
         }
@@ -776,6 +785,9 @@ final class GFDISession {
             return
         }
         guard let bytes = complete, let smart = try? GarminVivomovehr_Smart(serializedBytes: bytes) else { return }
+        // The service names only (the first line of each field), so the log shows what the watch asks for.
+        let services = smart.textFormatString().split(separator: "\n").filter { !$0.hasPrefix(" ") }.joined(separator: ",")
+        SyncDiagnostics.log("protobuf in id=\(chunk.requestID) \(services)")
         if smart.hasCalendarEventsService {
             await sendProtobufResponse(GFDICalendar.response(to: smart.calendarEventsService, events: calendarEvents),
                                        requestID: chunk.requestID)

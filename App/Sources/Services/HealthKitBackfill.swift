@@ -2,10 +2,13 @@ import Foundation
 import GarminBackend
 import HealthKit
 import Observation
+import UIKit
 
 /// Uploads the whole Apple Health history to the backend: every readable type, from every source, one month at a time.
 /// It only reads Health. A chunk the server takes is kept under its key, and chunks it already has are skipped, so a run
-/// that was cancelled or killed picks up where it stopped. Started by hand; a run that was killed resumes on the next launch.
+/// that was cancelled or killed picks up where it stopped. Started by hand; a run that was stopped by iOS or the network
+/// resumes when the app is opened again. Health data is unreadable while the phone is locked, so the run keeps the screen
+/// awake and asks for extra time to finish the chunk in flight when the app goes to the background.
 @MainActor
 @Observable
 final class HealthKitBackfill {
@@ -48,6 +51,11 @@ final class HealthKitBackfill {
         uploaded = 0
         skipped = [:]
         UserDefaults.standard.set(true, forKey: Self.startedKey)
+        UIApplication.shared.isIdleTimerDisabled = true
+        let background = UIApplication.shared.beginBackgroundTask(withName: "Apple Health upload") { [weak self] in
+            // Out of background time: stop cleanly; the run resumes when the app is opened again.
+            self?.task?.cancel()
+        }
         task = Task {
             do {
                 try await run(client)
@@ -59,6 +67,8 @@ final class HealthKitBackfill {
             }
             isRunning = false
             progress = nil
+            UIApplication.shared.isIdleTimerDisabled = false
+            UIApplication.shared.endBackgroundTask(background)
         }
     }
 
@@ -138,13 +148,28 @@ final class HealthKitBackfill {
             guard !have.contains(key) else { continue }
             try Task.checkCancellation()
             do {
-                try await send(chunk, key)
+                try await retrying { try await send(chunk, key) }
                 have.insert(key)
                 uploaded += chunk.count
             } catch BackendError.rejected(_, let message) {
                 skipped[key] = message
             }
         }
+    }
+
+    /// Retries a failed upload twice, 5 and then 20 seconds later, so a short network drop does not stop the run. A refusal
+    /// by the server and a cancellation are not retried.
+    private func retrying(_ operation: () async throws -> Void) async throws {
+        for delay in [5, 20] {
+            do {
+                return try await operation()
+            } catch {
+                if error is CancellationError { throw error }
+                if case BackendError.rejected = error { throw error }
+                try await Task.sleep(for: .seconds(delay))
+            }
+        }
+        try await operation()
     }
 
     /// The calendar months from the type's first sample up to now. A type without samples has none.

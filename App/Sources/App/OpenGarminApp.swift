@@ -19,6 +19,8 @@ struct OpenGarminApp: App {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { BackgroundSync.schedule() }
+            // Picks up an Apple Health upload that iOS or the network stopped.
+            if phase == .active { environment.backend.healthKit.resumeIfStarted() }
         }
     }
 }
