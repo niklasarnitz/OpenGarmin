@@ -44,8 +44,11 @@ export function Sleep() {
   const nights = useMemo(() => sleep.data ?? [], [sleep.data]);
 
   const stats = useMemo(() => {
+    // Nights without stage data (often older Connect nights) would count as 0 min asleep; leave them out of the stage
+    // statistics. Their bedtime, wake time and score are still real.
+    const staged = nights.filter((n) => asleepMinutes(minutesByStage(n)) > 0);
     const totals: Minutes = { awake: 0, light: 0, deep: 0, rem: 0, unmeasurable: 0 };
-    for (const n of nights) {
+    for (const n of staged) {
       const m = minutesByStage(n);
       for (const k of Object.keys(totals) as SleepStage[]) totals[k] += m[k];
     }
@@ -56,7 +59,8 @@ export function Sleep() {
     const years = starts.map((s) => (s - origin) / (365.25 * 86_400_000));
     return {
       totals,
-      asleepAvg: mean(nights.map((n) => asleepMinutes(minutesByStage(n)))),
+      stagedNights: staged.length,
+      asleepAvg: mean(staged.map((n) => asleepMinutes(minutesByStage(n)))),
       bedMedian: median(bed),
       bedSd: stdev(bed),
       wakeMedian: median(nights.map((n) => clockMinutes(n.end))),
@@ -118,7 +122,7 @@ export function Sleep() {
             <Stat
               label={t("slAvg")}
               value={stats.asleepAvg === null ? "–" : fmtHM(stats.asleepAvg)}
-              note={`${t("slNights")}: ${nights.length}`}
+              note={`${t("slNights")}: ${stats.stagedNights}`}
             />
             <Stat label={t("slBedtime")} value={stats.bedMedian === null ? "–" : fmtMinuteOfDay(stats.bedMedian)} />
             <Stat label={t("slWake")} value={stats.wakeMedian === null ? "–" : fmtMinuteOfDay(stats.wakeMedian)} />
@@ -137,7 +141,7 @@ export function Sleep() {
                 key={stage}
                 label={t(`slStage_${stage}` as Key)}
                 value={asleepTotal > 0 ? `${fmt((100 * totals[stage]) / asleepTotal)} %` : "–"}
-                note={fmtHM(totals[stage] / nights.length)}
+                note={stats.stagedNights > 0 ? fmtHM(totals[stage] / stats.stagedNights) : "–"}
               />
             ))}
           </div>
