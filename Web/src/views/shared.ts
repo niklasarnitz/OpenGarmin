@@ -16,6 +16,7 @@ export const PRESETS: { value: Preset; label: string }[] = [
   { value: "month", label: t("rangeMonth") },
   { value: "year", label: t("rangeYear") },
   { value: "five", label: t("rangeFive") },
+  { value: "ten", label: t("rangeTen") },
   { value: "all", label: t("rangeAll") },
 ];
 

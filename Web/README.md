@@ -12,7 +12,7 @@ bun run test        # vitest: analytics, stats, source resolution, insight links
 bun run typecheck
 ```
 
-Mock mode needs no server: open `?mock` (or build with `VITE_MOCK=1`). The fixtures in `src/mock.ts` cover March 2019 to today: seasonal steps, a slowly falling resting heart rate, sleep that predicts next-day HRV and stress, a bedtime that drifts later, a Garmin gap in early 2022 that Apple Health fills, two step sources, about a thousand activities with records and laps, and the server's insight findings, computed from the same data.
+Mock mode needs no server: open `?mock` (or build with `VITE_MOCK=1`). The fixtures in `src/mock.ts` cover March 2019 to today: seasonal steps, a slowly falling resting heart rate, sleep that predicts next-day HRV and stress, a bedtime that drifts later, a Garmin gap in early 2022 that Apple Health fills, two step sources, Apple Health nights without stages and Google Fit walks and rides without heart rate before the watch, about a thousand Garmin activities with records and laps, and the server's insight findings, computed from the same data.
 
 ## Charts and maps
 

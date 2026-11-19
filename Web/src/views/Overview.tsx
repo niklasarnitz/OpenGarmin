@@ -4,17 +4,28 @@ import { Notice, Section, Sparkline, Stat } from "../components/ui";
 import { useEarliestDay, useInsights, useSeries } from "../data";
 import { t } from "../i18n";
 import { fmt, fmtDay, fmtSigned } from "../lib/format";
-import { latest, recentVsBaseline, rolling, type Series } from "../lib/analytics";
+import { latest, recentVsBaseline, rolling, yearlyMeans, type Series } from "../lib/analytics";
 import { CONCEPTS, type ConceptId } from "../lib/concepts";
 import { addDays, daysBetween, daysInclusive, todayDay, weekdayIndex, yearOf, type Day } from "../lib/time";
 import { conceptName } from "./shared";
 
 const HERO_ORDER: ConceptId[] = ["restingHeartRate", "hrv", "sleepMinutes", "steps"];
 const TILES: ConceptId[] = ["steps", "restingHeartRate", "hrv", "sleepMinutes", "stress", "bodyBattery", "activeEnergy", "spo2"];
+const YEARS: ConceptId[] = [
+  "steps",
+  "distance",
+  "activeEnergy",
+  "heartRate",
+  "restingHeartRate",
+  "sleepMinutes",
+  "weight",
+  "activityMinutes",
+];
+const LOADED = [...new Set([...TILES, ...YEARS])];
 
 export function Overview() {
   const today = todayDay();
-  const { series, loading, error, retry } = useSeries(TILES, addDays(today, -4000), today);
+  const { series, loading, error, retry } = useSeries(LOADED, addDays(today, -3660), today);
   const earliest = useEarliestDay();
   const hasAny = TILES.some((id) => series[id].size > 0);
 
@@ -81,6 +92,8 @@ export function Overview() {
         </div>
       </Section>
 
+      <YourYears series={series} current={yearOf(today)} />
+
       <YearStrip steps={series.steps} />
     </>
   );
@@ -88,6 +101,60 @@ export function Overview() {
 
 function lastDays(s: Series, end: Day, n: number): (number | null)[] {
   return daysInclusive(addDays(end, -(n - 1)), end).map((d) => s.get(d) ?? null);
+}
+
+/**
+ * The mean day of each calendar year with data, newest first, over the last ten years. Rows come from the data, so a
+ * new year or an older import adds a row by itself.
+ */
+function YourYears({ series, current }: { series: Record<ConceptId, Series>; current: number }) {
+  const rows = useMemo(() => yearlyMeans(series, YEARS, current), [series, current]);
+  const ids = YEARS.filter((id) => rows.some((r) => r.means[id] !== undefined));
+  if (rows.length === 0) return null;
+  return (
+    <Section title={t("ovYourYears")} lead={t("ovYourYearsNote")}>
+      <div className="years-wrap">
+        <table className="years">
+          <thead>
+            <tr>
+              <th>{t("gYear")}</th>
+              {ids.map((id) => (
+                <th key={id} className="num">
+                  {conceptName(id)}
+                  {CONCEPTS[id].unit && <span className="muted"> {CONCEPTS[id].unit}</span>}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ year, means }) => {
+              const before = rows.find((r) => r.year === year - 1)?.means;
+              return (
+                <tr key={year}>
+                  <th scope="row">{year}</th>
+                  {ids.map((id) => {
+                    const value = means[id];
+                    const prev = before?.[id];
+                    const { decimals, higherIsBetter } = CONCEPTS[id];
+                    // The change between the values as shown, so the cells add up and a tiny change reads as none.
+                    const round = (v: number) => Number(v.toFixed(decimals));
+                    const shown = value !== undefined && prev !== undefined ? round(round(value) - round(prev)) : null;
+                    const tone = !shown || higherIsBetter === null ? "flat" : (shown > 0) === higherIsBetter ? "up" : "down";
+                    return (
+                      <td key={id} className="num">
+                        {value === undefined ? "" : fmt(value, decimals)}
+                        {shown !== null && <div className={`stat-note ${tone}`}>{shown === 0 ? "±0" : fmtSigned(shown, decimals)}</div>}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Section>
+  );
 }
 
 /** One row per year, one square per day, shaded by how that day's steps compare with the year's median. */

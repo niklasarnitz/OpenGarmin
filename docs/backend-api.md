@@ -89,11 +89,19 @@ do not duplicate either. Responses are `{id, key, sha256, duplicate}`. The reque
   `sleepRemMinutes`, `sleepAwakeMinutes`, `activityMinutes`, and every Apple Health quantity type by its identifier.
   `source` is `garmin` or `healthkit:<bundleID>`. Apple Health samples whose source bundle is
   `com.niklasarnitz.opengarmin` or starts with `com.garmin` are reported as `healthkit:garmin-mirror`, because they
-  copy Garmin data.
-- `GET /api/v1/sleep?from&to` → `[{start, end, score?, breakdown?, stages: [{start, end, stage}]}]`. Stages are
-  `awake`, `light`, `deep`, `rem` or `unmeasurable`.
-- `GET /api/v1/activities?from&to&limit&cursor` → `{items, nextCursor}`, newest first, `limit` up to 200.
-  `GET /api/v1/activities/{id}` → `{activity, laps, records}`. `GET /api/v1/activities/{id}/fit` → the raw file.
+  copy Garmin data. Apple Health sleep (`HKCategoryTypeIdentifierSleepAnalysis`) adds `sleep*Minutes` rows under its
+  source, each sample on the day 12 hours before it, so a night counts on the evening it starts. Apple Health workouts
+  that overlap no Garmin activity add `activityMinutes`.
+- `GET /api/v1/sleep?from&to` → `[{start, end, score?, breakdown?, stages: [{start, end, stage}], source}]`. Stages are
+  `awake`, `light`, `deep`, `rem`, `unmeasurable`, or `asleep` (Health sleep without a stage). `source` is `garmin` or a
+  Health source as above. Health sleep samples of one app become a night where they are at most 2 hours apart; a Health
+  night that overlaps a Garmin night is left out, and of overlapping Health nights the Garmin mirror wins, then the one
+  with the most sleep.
+- `GET /api/v1/activities?from&to&limit&cursor` → `{items, nextCursor}`, newest first, `limit` up to 200. Items carry
+  `source`: Garmin activities, plus Apple Health workouts (Google Fit and others) that overlap no Garmin activity, with
+  the activity type mapped to the nearest FIT sport.
+  `GET /api/v1/activities/{id}` → `{activity, laps, records}`; a Health workout has no laps and its route as records.
+  `GET /api/v1/activities/{id}/fit` → the raw file (Garmin only).
 - `GET /api/v1/days?from&to` → daily summaries: steps, active energy, resting heart rate, average stress, sleep
   minutes and activity count.
 - `GET /api/v1/export/history?from&to` → a `HealthBatch` for the range, so the app can restore after a reinstall.

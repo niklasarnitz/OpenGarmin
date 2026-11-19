@@ -27,6 +27,14 @@ enum Rollup {
         "sleepDeepMinutes": "min", "sleepLightMinutes": "min", "sleepRemMinutes": "min", "sleepAwakeMinutes": "min",
     ]
 
+    /// SQL for the source of a Health row with `source_bundle` on `alias`.
+    static func healthSource(_ alias: String) -> String {
+        """
+        CASE WHEN \(alias).source_bundle = 'com.niklasarnitz.opengarmin' OR \(alias).source_bundle LIKE 'com.garmin%'
+             THEN 'healthkit:garmin-mirror' ELSE 'healthkit:' || \(alias).source_bundle END
+        """
+    }
+
     static func isSummed(_ metric: String) -> Bool {
         summedGarmin.contains(metric) || summedHealthKit.contains(metric)
     }
@@ -35,12 +43,47 @@ enum Rollup {
     static func recompute(over dates: [Date], userID: UUID, sql: any SQLDatabase, calendar: Calendar) async throws {
         guard let first = dates.min(), let last = dates.max() else { return }
         let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: last))!
-        var cursor = calendar.startOfDay(for: first)
+        // A day earlier too: Health sleep after midnight belongs to the night that started the evening before.
+        var cursor = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: first))!
         // A year at a time, so one statement never covers a whole imported history.
         while cursor < end {
             let next = min(calendar.date(byAdding: .day, value: 366, to: cursor)!, end)
             try await aggregate(from: cursor, to: next, userID: userID, sql: sql, calendar: calendar)
             cursor = next
+        }
+    }
+
+    /// Bumped when the rules change in a way that adds daily values from data already stored. 2: Health sleep and
+    /// Health workouts.
+    static let version = 2
+
+    /// Computes every user's daily values again whose rollups predate `version`. Rows are upserted, never dropped, so
+    /// the dashboard keeps working meanwhile, and uploads that arrive during the run recompute their own days.
+    static func upgradeOutdated(_ app: Application) async {
+        struct UserRow: Decodable { let id: UUID; let timeZone: String }
+        do {
+            let sql = try app.db.sql()
+            let users = try await sql.raw("""
+                SELECT id, time_zone AS "timeZone" FROM users WHERE rollup_version < \(bind: version)
+                """).all(decoding: UserRow.self)
+            for user in users {
+                app.logger.info("Recomputing daily values of user \(user.id) for rollup version \(version)")
+                let bounds = try await sql.raw("""
+                    SELECT least((SELECT min(ts) FROM samples WHERE user_id = \(bind: user.id)),
+                                 (SELECT min(start) FROM healthkit_samples WHERE user_id = \(bind: user.id)),
+                                 (SELECT min(start_ts) FROM healthkit_workouts WHERE user_id = \(bind: user.id)),
+                                 (SELECT min(start_ts) FROM sleep_sessions WHERE user_id = \(bind: user.id))) AS "first",
+                           now() AS "last"
+                    """).first(decoding: Bounds.self)
+                if let first = bounds?.first, let last = bounds?.last {
+                    try await recompute(over: [first, last], userID: user.id, sql: sql, calendar: userCalendar(user.timeZone))
+                }
+                try await sql.raw("""
+                    UPDATE users SET rollup_version = \(bind: version), insights_dirty_at = now() WHERE id = \(bind: user.id)
+                    """).run()
+            }
+        } catch {
+            app.logger.report(error: error)
         }
     }
 
@@ -53,6 +96,7 @@ enum Rollup {
             try await sql.raw("SELECT min(start) AS \"first\", max(start) AS \"last\" FROM healthkit_samples WHERE user_id = \(bind: userID)").first(decoding: Bounds.self),
             try await sql.raw("SELECT min(start_ts) AS \"first\", max(start_ts) AS \"last\" FROM sleep_sessions WHERE user_id = \(bind: userID)").first(decoding: Bounds.self),
             try await sql.raw("SELECT min(start_ts) AS \"first\", max(start_ts) AS \"last\" FROM activities WHERE user_id = \(bind: userID)").first(decoding: Bounds.self),
+            try await sql.raw("SELECT min(start_ts) AS \"first\", max(start_ts) AS \"last\" FROM healthkit_workouts WHERE user_id = \(bind: userID)").first(decoding: Bounds.self),
         ]
         let dates = bounds.compactMap { $0 }.flatMap { [$0.first, $0.last] }.compactMap { $0 }
         guard !dates.isEmpty else { return }
@@ -91,6 +135,26 @@ enum Rollup {
               SELECT (a.start_ts AT TIME ZONE \(bind: zone)::text)::date, 'activityMinutes', 'garmin', 'min', a.duration / 60
               FROM activities a
               WHERE a.user_id = \(bind: userID) AND a.start_ts >= \(bind: start) AND a.start_ts < \(bind: end)
+              UNION ALL
+              -- Health workouts that no Garmin activity covers.
+              SELECT (w.start_ts AT TIME ZONE \(bind: zone)::text)::date, 'activityMinutes', \(unsafeRaw: healthSource("w")), 'min',
+                     w.duration / 60
+              FROM healthkit_workouts w
+              WHERE w.user_id = \(bind: userID) AND w.start_ts >= \(bind: start) AND w.start_ts < \(bind: end)
+                AND \(unsafeRaw: HealthSleep.workoutNotOnGarmin)
+              UNION ALL
+              -- Health sleep, by night: a sample belongs to the day 12 hours before it, like a night that starts that
+              -- evening. Each sample counts once in total sleep (awake excluded) and once in its stage.
+              SELECT ((hs.start AT TIME ZONE \(bind: zone)::text) - interval '12 hours')::date, m.metric, \(unsafeRaw: healthSource("hs")),
+                     'min', extract(epoch FROM hs.end_ts - hs.start)::double precision / 60
+              FROM healthkit_samples hs
+              CROSS JOIN LATERAL (VALUES
+                (CASE WHEN hs.category_value IN (1, 3, 4, 5) THEN 'sleepMinutes' END),
+                (CASE hs.category_value WHEN 2 THEN 'sleepAwakeMinutes' WHEN 3 THEN 'sleepLightMinutes'
+                                        WHEN 4 THEN 'sleepDeepMinutes' WHEN 5 THEN 'sleepRemMinutes' END)
+              ) AS m(metric)
+              WHERE hs.user_id = \(bind: userID) AND hs.type = 'HKCategoryTypeIdentifierSleepAnalysis' AND m.metric IS NOT NULL
+                AND hs.start >= \(bind: start.addingTimeInterval(12 * 3600)) AND hs.start < \(bind: end.addingTimeInterval(12 * 3600))
               UNION ALL
               SELECT (h.start AT TIME ZONE \(bind: zone)::text)::date, h.type,
                      CASE WHEN h.source_bundle = 'com.niklasarnitz.opengarmin' OR h.source_bundle LIKE 'com.garmin%'

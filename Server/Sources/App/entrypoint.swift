@@ -11,6 +11,7 @@ enum Entrypoint {
             try await app.autoMigrate()
             Task { await ConnectArchive.reprocessOutdated(app) }
             Task { await InsightJob.run(app) }
+            Task { await Rollup.upgradeOutdated(app) }
             try await app.execute()
         } catch {
             app.logger.report(error: error)

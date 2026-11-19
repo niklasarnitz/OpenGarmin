@@ -275,3 +275,26 @@ export function recentVsBaseline(
   if (recent.length < 3 || usual.length < 7) return null;
   return { recent: mean(recent) ?? 0, usual: mean(usual) ?? 0, n: recent.length };
 }
+
+export interface YearRow<K extends string> {
+  year: number;
+  /** Mean of the year's daily values per key; absent when the year has no day for it. */
+  means: Partial<Record<K, number>>;
+}
+
+/**
+ * One row per calendar year with any data, newest first, from the earliest year with data (at most `span` years
+ * back, counting `current`) to `current`. A value is the mean of that year's days that have one, so a year with half
+ * its days recorded is not half as large.
+ */
+export function yearlyMeans<K extends string>(series: Record<K, Series>, keys: readonly K[], current: number, span = 10): YearRow<K>[] {
+  const rows = new Map<number, Partial<Record<K, number>>>();
+  for (const key of keys) {
+    for (const bucket of aggregate(series[key], "year", "avg")) {
+      const year = yearOf(bucket.start);
+      if (year > current || year <= current - span) continue;
+      rows.set(year, { ...rows.get(year), [key]: bucket.value });
+    }
+  }
+  return [...rows].sort(([a], [b]) => b - a).map(([year, means]) => ({ year, means }));
+}

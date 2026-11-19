@@ -11,7 +11,19 @@ import type { ConceptId } from "../lib/concepts";
 import { dayMs, todayDay } from "../lib/time";
 import { conceptName, valueText } from "./shared";
 
-const IDS: ConceptId[] = ["steps", "activeEnergy", "restingHeartRate", "hrv", "sleepMinutes", "stress", "bodyBattery", "spo2"];
+const IDS: ConceptId[] = [
+  "steps",
+  "activeEnergy",
+  "activityMinutes",
+  "heartRate",
+  "restingHeartRate",
+  "hrv",
+  "sleepMinutes",
+  "stress",
+  "bodyBattery",
+  "spo2",
+  "weight",
+];
 
 export function Trends() {
   const today = todayDay();

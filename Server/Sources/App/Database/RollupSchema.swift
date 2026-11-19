@@ -36,3 +36,16 @@ struct CreateRollups: AsyncMigration {
         try await sql.raw("ALTER TABLE users DROP COLUMN IF EXISTS time_zone").run()
     }
 }
+
+/// Which version of the rollup rules each user's daily values were last computed with. See `Rollup.version`.
+struct AddRollupVersion: AsyncMigration {
+    let name = "AddRollupVersion"
+
+    func prepare(on database: any Database) async throws {
+        try await database.sql().raw("ALTER TABLE users ADD COLUMN rollup_version integer NOT NULL DEFAULT 0").run()
+    }
+
+    func revert(on database: any Database) async throws {
+        try await database.sql().raw("ALTER TABLE users DROP COLUMN IF EXISTS rollup_version").run()
+    }
+}

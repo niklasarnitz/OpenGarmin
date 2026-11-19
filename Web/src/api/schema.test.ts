@@ -19,6 +19,54 @@ describe("server responses", () => {
     expect(night?.score).toBeUndefined();
   });
 
+  it("parse an Apple Health night without score or breakdown and with an asleep stage", () => {
+    const [night] = S.SleepSession.array().parse([
+      {
+        start: "2018-05-02T22:10:00.000Z",
+        end: "2018-05-03T06:00:00.000Z",
+        score: null,
+        breakdown: null,
+        source: "healthkit:com.google.android.apps.fitness",
+        stages: [{ start: "2018-05-02T22:10:00.000Z", end: "2018-05-03T06:00:00.000Z", stage: "asleep" }],
+      },
+    ]);
+    expect(night?.source).toBe("healthkit:com.google.android.apps.fitness");
+    expect(night?.stages[0]?.stage).toBe("asleep");
+    expect(night?.score).toBeUndefined();
+  });
+
+  it("default the source of a night or activity from an older server to garmin", () => {
+    expect(S.SleepSession.parse({ start: "2026-11-17T22:41:00Z", end: "2026-11-18T06:02:00Z", stages: [] }).source).toBe("garmin");
+    const page = S.ActivityPage.parse({
+      items: [{ id: "a", externalId: "e", sport: 1, start: "2026-11-18T07:00:00Z", end: "2026-11-18T07:40:00Z", duration: 2400 }],
+    });
+    expect(page.items[0]?.source).toBe("garmin");
+  });
+
+  it("parse a Health workout with no laps and route records only", () => {
+    const detail = S.ActivityDetail.parse({
+      activity: {
+        id: "6c1e4f9a-0000-4000-8000-000000000002",
+        externalId: "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+        sport: 11,
+        subSport: null,
+        name: null,
+        start: "2017-06-01T17:00:00.000Z",
+        end: "2017-06-01T17:30:00.000Z",
+        duration: 1800,
+        distance: 2400,
+        averageHeartRate: null,
+        source: "healthkit:com.google.android.apps.fitness",
+      },
+      laps: [],
+      records: [
+        { date: "2017-06-01T17:00:00.000Z", latitude: 52.5, longitude: 13.4, altitude: 40, speed: 1.3, heartRate: null, distance: null, cadence: null, power: null, temperature: null },
+      ],
+    });
+    expect(detail.activity.source).toBe("healthkit:com.google.android.apps.fitness");
+    expect(detail.records[0]?.heartRate).toBeUndefined();
+  });
+
   it("parse an activity detail with its summary nested", () => {
     const detail = S.ActivityDetail.parse({
       activity: {
@@ -74,5 +122,28 @@ describe("mock data", () => {
     check(S.ActivityPage, page);
     check(S.ActivityDetail, mock.activity(page.items[0]!.id));
     check(z.array(S.Insight), mock.insights(from, to, "en"));
+  });
+
+  it("includes Apple Health nights and Health workouts in the server's shape", () => {
+    const nights = mock.sleep(addDays(to, -4000), to);
+    check(z.array(S.SleepSession), nights);
+    const health = nights.find((n) => n.source !== "garmin");
+    expect(health?.stages.some((s) => s.stage === "asleep")).toBe(true);
+    expect(health?.score).toBeUndefined();
+
+    const page = mock.activities(5, "2020-01-01");
+    check(S.ActivityPage, page);
+    const workout = page.items.find((a) => a.source !== "garmin");
+    expect(workout).toBeDefined();
+    const detail = mock.activity(workout!.id);
+    check(S.ActivityDetail, detail);
+    expect(detail.laps).toEqual([]);
+    expect(detail.records.every((r) => r.heartRate === undefined)).toBe(true);
+  });
+
+  it("pages activities by start time, like the server's cursor", () => {
+    const first = mock.activities(3);
+    const second = mock.activities(3, first.nextCursor);
+    expect(Date.parse(second.items[0]!.start)).toBeLessThan(Date.parse(first.items[2]!.start));
   });
 });

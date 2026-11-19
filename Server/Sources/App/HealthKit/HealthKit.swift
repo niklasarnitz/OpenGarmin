@@ -115,8 +115,9 @@ enum HealthKitImport {
     static func workouts(_ upload: HealthWorkoutsUpload, user: AuthenticatedUser, on req: Request) async throws -> UploadResult {
         guard upload.items.count <= maxWorkouts else { throw Abort(.badRequest, reason: "At most \(maxWorkouts) items per request.") }
         let items = upload.items
+        let calendar = user.calendar
         return try await Ingest.once(upload.key, kind: "healthkit", user: user, on: req) { sql in
-            try await writeWorkouts(items, userID: user.id, sql: sql)
+            try await writeWorkouts(items, userID: user.id, calendar: calendar, sql: sql)
         }
     }
 
@@ -152,7 +153,7 @@ enum HealthKitImport {
         try await InsightStore.markDirty(sql, userID: userID)
     }
 
-    static func writeWorkouts(_ items: [WorkoutDTO], userID: UUID, sql: any SQLDatabase) async throws {
+    static func writeWorkouts(_ items: [WorkoutDTO], userID: UUID, calendar: Calendar, sql: any SQLDatabase) async throws {
         var unique: [UUID: WorkoutDTO] = [:]
         for item in items { unique[item.uuid] = item }
         let workouts = unique.values.sorted { $0.start < $1.start }
@@ -185,6 +186,9 @@ enum HealthKitImport {
                     }, tail: " ON CONFLICT (workout_id, ts) DO NOTHING")
             }
         }
+        // Workouts count as activity minutes on days without Garmin activities.
+        try await Rollup.recompute(over: workouts.map(\.start), userID: userID, sql: sql, calendar: calendar)
+        try await InsightStore.markDirty(sql, userID: userID)
     }
 
     static func writeElectrocardiograms(_ items: [ElectrocardiogramDTO], userID: UUID, sql: any SQLDatabase) async throws {

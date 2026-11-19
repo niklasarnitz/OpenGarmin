@@ -18,7 +18,19 @@ export type ConceptId =
   | "exerciseMinutes"
   | "weight"
   | "bodyFat"
-  | "wristTemperature";
+  | "wristTemperature"
+  | "heartRate"
+  | "restingEnergy"
+  | "standMinutes"
+  | "cyclingDistance"
+  | "bmi"
+  | "noiseExposure"
+  | "headphoneExposure"
+  | "activityMinutes"
+  | "sleepDeepMinutes"
+  | "sleepRemMinutes"
+  | "sleepLightMinutes"
+  | "sleepAwakeMinutes";
 
 export interface Concept {
   id: ConceptId;
@@ -102,6 +114,50 @@ export const CONCEPTS: Record<ConceptId, Concept> = {
     decimals: 2,
     higherIsBetter: null,
   },
+  // The day's mean of every reading, during activity and rest alike (Apple stores count/min).
+  heartRate: { id: "heartRate", keys: ["heartRate", "HKQuantityTypeIdentifierHeartRate"], unit: "bpm", agg: "avg", decimals: 0, higherIsBetter: null },
+  // Apple's "Cal" is the food calorie, a kilocalorie.
+  restingEnergy: {
+    id: "restingEnergy",
+    keys: ["restingEnergy", "HKQuantityTypeIdentifierBasalEnergyBurned"],
+    unit: "kcal",
+    agg: "sum",
+    decimals: 0,
+    higherIsBetter: null,
+  },
+  standMinutes: { id: "standMinutes", keys: ["HKQuantityTypeIdentifierAppleStandTime"], unit: "min", agg: "sum", decimals: 0, higherIsBetter: true },
+  cyclingDistance: {
+    id: "cyclingDistance",
+    keys: ["HKQuantityTypeIdentifierDistanceCycling"],
+    unit: "km",
+    agg: "sum",
+    decimals: 1,
+    higherIsBetter: true,
+  },
+  bmi: { id: "bmi", keys: ["HKQuantityTypeIdentifierBodyMassIndex"], unit: "", agg: "avg", decimals: 1, higherIsBetter: null },
+  // Both in dB(A) SPL.
+  noiseExposure: {
+    id: "noiseExposure",
+    keys: ["HKQuantityTypeIdentifierEnvironmentalAudioExposure"],
+    unit: "dB",
+    agg: "avg",
+    decimals: 0,
+    higherIsBetter: false,
+  },
+  headphoneExposure: {
+    id: "headphoneExposure",
+    keys: ["HKQuantityTypeIdentifierHeadphoneAudioExposure"],
+    unit: "dB",
+    agg: "avg",
+    decimals: 0,
+    higherIsBetter: false,
+  },
+  // Minutes of recorded activities and workouts, from Garmin and Apple Health alike.
+  activityMinutes: { id: "activityMinutes", keys: ["activityMinutes"], unit: "min", agg: "sum", decimals: 0, higherIsBetter: true },
+  sleepDeepMinutes: { id: "sleepDeepMinutes", keys: ["sleepDeepMinutes"], unit: "min", agg: "sum", decimals: 0, higherIsBetter: true },
+  sleepRemMinutes: { id: "sleepRemMinutes", keys: ["sleepRemMinutes"], unit: "min", agg: "sum", decimals: 0, higherIsBetter: true },
+  sleepLightMinutes: { id: "sleepLightMinutes", keys: ["sleepLightMinutes"], unit: "min", agg: "sum", decimals: 0, higherIsBetter: null },
+  sleepAwakeMinutes: { id: "sleepAwakeMinutes", keys: ["sleepAwakeMinutes"], unit: "min", agg: "sum", decimals: 0, higherIsBetter: false },
 };
 
 export const CONCEPT_IDS = Object.keys(CONCEPTS) as ConceptId[];

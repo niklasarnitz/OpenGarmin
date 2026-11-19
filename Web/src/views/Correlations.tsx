@@ -3,7 +3,7 @@ import type { EChartsCoreOption } from "echarts/core";
 import { Chart } from "../components/Chart";
 import { palette, useDark } from "../components/theme";
 import { Notice, Section, Segmented, Stat } from "../components/ui";
-import { useEarliestDay, useSeries } from "../data";
+import { useEarliestDay, useHeldConcepts, useSeries } from "../data";
 import { t } from "../i18n";
 import { fmt } from "../lib/format";
 import { correlationMatrix, relate } from "../lib/analytics";
@@ -12,7 +12,9 @@ import { fmtDay } from "../lib/format";
 import { presetStart, todayDay, type Preset } from "../lib/time";
 import { PRESETS, conceptName, rangeFromQuery } from "./shared";
 
-const ALL: ConceptId[] = ["sleepMinutes", "restingHeartRate", "hrv", "stress", "bodyBattery", "steps", "activeEnergy"];
+/** Selected at first; every concept with data can be added. */
+const DEFAULT: ConceptId[] = ["sleepMinutes", "restingHeartRate", "hrv", "stress", "bodyBattery", "steps", "activeEnergy"];
+const ORDER: ConceptId[] = [...DEFAULT, ...CONCEPT_IDS.filter((id) => !DEFAULT.includes(id))];
 
 const LAGS = [
   { value: "0", label: t("coLag0") },
@@ -51,7 +53,7 @@ export function Correlations({ query }: { query: URLSearchParams }) {
   const x0 = conceptParam(query, "x", "sleepMinutes");
   const y0 = conceptParam(query, "y", "hrv");
   const lagParam = query.get("lag");
-  const [picked, setPicked] = useState<ConceptId[]>(() => [...new Set([...ALL, x0, y0])]);
+  const [picked, setPicked] = useState<ConceptId[]>(() => ORDER.filter((id) => DEFAULT.includes(id) || id === x0 || id === y0));
   const [preset, setPreset] = useState<Preset>("all");
   const [custom, setCustom] = useState(() => rangeFromQuery(query));
   const [lagKey, setLagKey] = useState(lagParam && LAG_KEYS.includes(lagParam) ? lagParam : "1");
@@ -61,6 +63,8 @@ export function Correlations({ query }: { query: URLSearchParams }) {
   const p = palette(useDark());
   const today = todayDay();
   const earliest = useEarliestDay();
+  const held = useHeldConcepts();
+  const choices = ORDER.filter((id) => held.includes(id) || picked.includes(id));
   const range = custom ?? { from: presetStart(preset, today, earliest), to: today };
   const { series, loading, error, retry } = useSeries(picked, range.from, range.to);
 
@@ -114,7 +118,7 @@ export function Correlations({ query }: { query: URLSearchParams }) {
   const toggle = (id: ConceptId) =>
     setPicked((cur) => {
       if (cur.includes(id)) return cur.length > 2 ? cur.filter((x) => x !== id) : cur;
-      return ALL.filter((x) => x === id || cur.includes(x));
+      return ORDER.filter((x) => x === id || cur.includes(x));
     });
 
   if (error) return <Notice action={t("retry")} onAction={retry}>{t("loadFailed")}</Notice>;
@@ -122,7 +126,7 @@ export function Correlations({ query }: { query: URLSearchParams }) {
   return (
     <Section title={t("coTitle")} lead={t("coLead")}>
       <div className="chips" role="group" aria-label={t("coSelect")}>
-        {ALL.map((id) => (
+        {choices.map((id) => (
           <button key={id} type="button" aria-pressed={picked.includes(id)} onClick={() => toggle(id)}>
             {conceptName(id)}
           </button>

@@ -11,11 +11,12 @@ import { mean, median, stdev, theilSen } from "../lib/stats";
 import { dayOf, presetStart, todayDay, type Day, type Preset } from "../lib/time";
 import { PRESETS } from "./shared";
 
-const STAGES: SleepStage[] = ["deep", "light", "rem", "awake"];
+const STAGES: SleepStage[] = ["deep", "light", "rem", "asleep", "awake"];
 const COLOR: Record<SleepStage, string> = {
   deep: "#4b5bc4",
   light: "#9bbcd6",
   rem: "#2f9c8a",
+  asleep: "#7d8bb0",
   awake: "#c77d3a",
   unmeasurable: "#9aa29c",
 };
@@ -23,12 +24,14 @@ const COLOR: Record<SleepStage, string> = {
 type Minutes = Record<SleepStage, number>;
 
 function minutesByStage(session: SleepSession): Minutes {
-  const out: Minutes = { awake: 0, light: 0, deep: 0, rem: 0, unmeasurable: 0 };
+  const out: Minutes = { awake: 0, light: 0, deep: 0, rem: 0, asleep: 0, unmeasurable: 0 };
   for (const iv of session.stages) out[iv.stage] += (Date.parse(iv.end) - Date.parse(iv.start)) / 60_000;
   return out;
 }
 
-const asleepMinutes = (m: Minutes) => m.light + m.deep + m.rem;
+/** "asleep" counts too: older devices and many Apple Health nights only know asleep or awake. */
+const asleepMinutes = (m: Minutes) => m.light + m.deep + m.rem + m.asleep;
+const hasStages = (m: Minutes) => m.light + m.deep + m.rem > 0;
 
 function clockMinutes(iso: string): number {
   const d = new Date(iso);
@@ -44,12 +47,14 @@ export function Sleep() {
   const nights = useMemo(() => sleep.data ?? [], [sleep.data]);
 
   const stats = useMemo(() => {
-    // Nights without stage data (often older Connect nights) would count as 0 min asleep; leave them out of the stage
-    // statistics. Their bedtime, wake time and score are still real.
-    const staged = nights.filter((n) => asleepMinutes(minutesByStage(n)) > 0);
-    const totals: Minutes = { awake: 0, light: 0, deep: 0, rem: 0, unmeasurable: 0 };
-    for (const n of staged) {
-      const m = minutesByStage(n);
+    // Nights without any sleep data (often older Connect nights) would count as 0 min asleep; leave them out of the
+    // statistics. Their bedtime, wake time and score are still real. Stage shares use only nights with detailed
+    // stages, since an "asleep only" night would count as no deep or REM sleep at all.
+    const minutes = nights.map(minutesByStage);
+    const slept = minutes.filter((m) => asleepMinutes(m) > 0);
+    const staged = minutes.filter(hasStages);
+    const totals: Minutes = { awake: 0, light: 0, deep: 0, rem: 0, asleep: 0, unmeasurable: 0 };
+    for (const m of staged) {
       for (const k of Object.keys(totals) as SleepStage[]) totals[k] += m[k];
     }
     const bed = nights.map((n) => bedtimeMinutes(n.start));
@@ -59,8 +64,9 @@ export function Sleep() {
     const years = starts.map((s) => (s - origin) / (365.25 * 86_400_000));
     return {
       totals,
+      sleptNights: slept.length,
       stagedNights: staged.length,
-      asleepAvg: mean(staged.map((n) => asleepMinutes(minutesByStage(n)))),
+      asleepAvg: mean(slept.map(asleepMinutes)),
       bedMedian: median(bed),
       bedSd: stdev(bed),
       wakeMedian: median(nights.map((n) => clockMinutes(n.end))),
@@ -107,7 +113,8 @@ export function Sleep() {
   if (sleep.error) return <Notice action={t("retry")} onAction={sleep.retry}>{t("loadFailed")}</Notice>;
 
   const { totals } = stats;
-  const asleepTotal = asleepMinutes(totals);
+  // Shares of deep, REM and light sleep among the minutes with a known stage.
+  const stagedTotal = totals.light + totals.deep + totals.rem;
   const control = <Segmented label={t("xpRange")} value={preset} options={PRESETS} onChange={setPreset} />;
 
   return (
@@ -122,7 +129,7 @@ export function Sleep() {
             <Stat
               label={t("slAvg")}
               value={stats.asleepAvg === null ? "–" : fmtHM(stats.asleepAvg)}
-              note={`${t("slNights")}: ${stats.stagedNights}`}
+              note={`${t("slNights")}: ${stats.sleptNights}`}
             />
             <Stat label={t("slBedtime")} value={stats.bedMedian === null ? "–" : fmtMinuteOfDay(stats.bedMedian)} />
             <Stat label={t("slWake")} value={stats.wakeMedian === null ? "–" : fmtMinuteOfDay(stats.wakeMedian)} />
@@ -140,8 +147,12 @@ export function Sleep() {
               <Stat
                 key={stage}
                 label={t(`slStage_${stage}` as Key)}
-                value={asleepTotal > 0 ? `${fmt((100 * totals[stage]) / asleepTotal)} %` : "–"}
-                note={stats.stagedNights > 0 ? fmtHM(totals[stage] / stats.stagedNights) : "–"}
+                value={stagedTotal > 0 ? `${fmt((100 * totals[stage]) / stagedTotal)} %` : "–"}
+                note={
+                  stats.stagedNights > 0
+                    ? `${fmtHM(totals[stage] / stats.stagedNights)} · ${t("slStagedNights", { n: stats.stagedNights })}`
+                    : "–"
+                }
               />
             ))}
           </div>

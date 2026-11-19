@@ -47,6 +47,8 @@ struct ActivitySummary: Content {
     let averageCadence: Int?
     let averagePower: Int?
     let trainingEffect: Double?
+    /// `garmin`, or `healthkit:<bundle>` / `healthkit:garmin-mirror` for a workout from Apple Health.
+    let source: String
 }
 
 struct ActivityPage: Content {
@@ -87,12 +89,15 @@ struct SleepSessionDTO: Content {
     let score: Int?
     let breakdown: SleepScoreBreakdown?
     let stages: [SleepStageDTO]
+    /// `garmin`, or `healthkit:<bundle>` / `healthkit:garmin-mirror` for a night from Apple Health.
+    let source: String
 }
 
-struct SleepStageDTO: Content {
+struct SleepStageDTO: Content, Equatable {
     let start: Date
     let end: Date
-    let stage: SleepStage
+    /// A `SleepStage` raw value, or `asleep` for Health sleep without a stage.
+    let stage: String
 }
 
 /// The read side of the API. Ranges are `from` (inclusive) and `to` (exclusive), ISO 8601.
@@ -179,7 +184,16 @@ enum Reads {
             """).all(decoding: DaySummary.self)
     }
 
+    /// Garmin's nights, plus the Apple Health nights on which Garmin has none.
     static func sleep(_ req: Request, user: AuthenticatedUser, window: Window) async throws -> [SleepSessionDTO] {
+        let garmin = try await garminSleep(req, user: user, window: window)
+        let health = try await HealthSleep.nights(try req.sql, userID: user.id, from: window.from, to: window.to).map {
+            SleepSessionDTO(start: $0.start, end: $0.end, score: nil, breakdown: nil, stages: $0.stages, source: $0.source)
+        }
+        return (garmin + health).sorted { $0.start < $1.start }
+    }
+
+    private static func garminSleep(_ req: Request, user: AuthenticatedUser, window: Window) async throws -> [SleepSessionDTO] {
         struct SessionRow: Decodable {
             let id: UUID
             let start: Date
@@ -209,8 +223,9 @@ enum Reads {
         let bySession = Dictionary(grouping: stages, by: \.sessionID)
         return sessions.map { session in
             let breakdown = session.breakdown.flatMap { try? JSONDecoder().decode(SleepScoreBreakdown.self, from: Data($0.utf8)) }
-            let rows = (bySession[session.id] ?? []).map { SleepStageDTO(start: $0.start, end: $0.end, stage: $0.stage) }
-            return SleepSessionDTO(start: session.start, end: session.end, score: session.score, breakdown: breakdown, stages: rows)
+            let rows = (bySession[session.id] ?? []).map { SleepStageDTO(start: $0.start, end: $0.end, stage: $0.stage.rawValue) }
+            return SleepSessionDTO(start: session.start, end: session.end, score: session.score, breakdown: breakdown, stages: rows,
+                                   source: "garmin")
         }
     }
 
@@ -218,15 +233,36 @@ enum Reads {
         id, external_id AS "externalId", sport, sub_sport AS "subSport", name, start_ts AS "start", end_ts AS "end",
         duration, distance, active_calories AS "activeCalories", avg_hr AS "averageHeartRate", max_hr AS "maxHeartRate",
         total_ascent AS "totalAscent", total_descent AS "totalDescent", avg_speed AS "averageSpeed",
-        avg_cadence AS "averageCadence", avg_power AS "averagePower", training_effect AS "trainingEffect"
+        avg_cadence AS "averageCadence", avg_power AS "averagePower", training_effect AS "trainingEffect", 'garmin' AS source
+        """
+
+    /// Apple Health workouts in the shape of `activityColumns`. The activity type becomes the nearest FIT sport.
+    static let workoutColumns = """
+        w.id, w.uuid::text AS "externalId",
+        CASE w.activity_type WHEN 37 THEN 1 WHEN 13 THEN 2 WHEN 46 THEN 5 WHEN 52 THEN 11 WHEN 24 THEN 17 WHEN 35 THEN 15
+            WHEN 16 THEN 4 WHEN 20 THEN 10 WHEN 50 THEN 10 WHEN 61 THEN 13 WHEN 60 THEN 12 ELSE 0 END AS sport,
+        NULL::integer AS "subSport", NULL::text AS name, w.start_ts AS "start", w.end_ts AS "end", w.duration,
+        w.total_distance_m AS distance, w.total_energy_kcal AS "activeCalories", NULL::integer AS "averageHeartRate",
+        NULL::integer AS "maxHeartRate", NULL::double precision AS "totalAscent", NULL::double precision AS "totalDescent",
+        CASE WHEN w.total_distance_m > 0 AND w.duration > 0 THEN w.total_distance_m / w.duration END AS "averageSpeed",
+        NULL::integer AS "averageCadence", NULL::integer AS "averagePower", NULL::double precision AS "trainingEffect",
+        CASE WHEN w.source_bundle = 'com.niklasarnitz.opengarmin' OR w.source_bundle LIKE 'com.garmin%'
+             THEN 'healthkit:garmin-mirror' ELSE 'healthkit:' || w.source_bundle END AS source
         """
 
     /// Newest first. `limit` rows are returned; `nextCursor` is the start of the last one when more exist.
     static func activityPage(_ req: Request, user: AuthenticatedUser, window: Window, limit: Int) async throws -> ActivityPage {
+        // Garmin's activities and the Health workouts that no Garmin activity covers.
         let rows = try await req.sql.raw("""
-            SELECT \(unsafeRaw: activityColumns) FROM activities
-            WHERE user_id = \(bind: user.id) AND start_ts >= \(bind: window.from) AND start_ts < \(bind: window.to)
-            ORDER BY start_ts DESC LIMIT \(bind: limit + 1)
+            SELECT * FROM (
+              SELECT \(unsafeRaw: activityColumns) FROM activities
+              WHERE user_id = \(bind: user.id) AND start_ts >= \(bind: window.from) AND start_ts < \(bind: window.to)
+              UNION ALL
+              SELECT \(unsafeRaw: workoutColumns) FROM healthkit_workouts w
+              WHERE w.user_id = \(bind: user.id) AND w.start_ts >= \(bind: window.from) AND w.start_ts < \(bind: window.to)
+                AND \(unsafeRaw: HealthSleep.workoutNotOnGarmin)
+            ) AS x
+            ORDER BY "start" DESC LIMIT \(bind: limit + 1)
             """).all(decoding: ActivitySummary.self)
         let items = Array(rows.prefix(limit))
         let next: String? = rows.count > limit ? items.last.map { TimeCoding.string($0.start) } : nil
@@ -237,10 +273,26 @@ enum Reads {
         let sql = try req.sql
         guard let summary = try await sql.raw("""
             SELECT \(unsafeRaw: activityColumns) FROM activities WHERE id = \(bind: id) AND user_id = \(bind: user.id)
-            """).first(decoding: ActivitySummary.self) else { return nil }
+            """).first(decoding: ActivitySummary.self) else {
+            return try await workoutDetail(sql, user: user, id: id)
+        }
         let laps = try await lapRows(sql, activity: id)
         let records = try await recordRows(sql, activity: id)
         return ActivityDetail(activity: summary, laps: laps, records: records)
+    }
+
+    /// A Health workout with its route as records.
+    private static func workoutDetail(_ sql: any SQLDatabase, user: AuthenticatedUser, id: UUID) async throws -> ActivityDetail? {
+        guard let summary = try await sql.raw("""
+            SELECT \(unsafeRaw: workoutColumns) FROM healthkit_workouts w WHERE w.id = \(bind: id) AND w.user_id = \(bind: user.id)
+            """).first(decoding: ActivitySummary.self) else { return nil }
+        let records = try await sql.raw("""
+            SELECT ts AS "date", latitude, longitude, altitude, NULL::integer AS "heartRate", speed,
+                   NULL::double precision AS distance, NULL::integer AS cadence, NULL::integer AS power,
+                   NULL::double precision AS temperature
+            FROM healthkit_route_points WHERE workout_id = \(bind: id) ORDER BY ts
+            """).all(decoding: RecordRow.self)
+        return ActivityDetail(activity: summary, laps: [], records: records)
     }
 
     static func fitFile(_ req: Request, user: AuthenticatedUser, id: UUID) async throws -> FileRef? {
@@ -263,15 +315,16 @@ enum Reads {
                 """).all(decoding: SamplePoint.self)
             metric.fill(&batch, points)
         }
-        let sessions = try await sleep(req, user: user, window: window)
+        // Only Garmin's own data: the app restores it, and Health data already lives in Health on the phone.
+        let sessions = try await garminSleep(req, user: user, window: window)
         batch.sleep = sessions.map { session in
             SleepSession(
                 start: session.start, end: session.end,
-                intervals: session.stages.map { SleepInterval(start: $0.start, end: $0.end, stage: $0.stage) },
+                intervals: session.stages.map { SleepInterval(start: $0.start, end: $0.end, stage: SleepStage(rawValue: $0.stage) ?? .unmeasurable) },
                 score: session.score, scoreBreakdown: session.breakdown
             )
         }
-        let summaries = try await activityPage(req, user: user, window: window, limit: 1_000_000).items
+        let summaries = try await activityPage(req, user: user, window: window, limit: 1_000_000).items.filter { $0.source == "garmin" }
         for summary in summaries {
             let laps = try await lapRows(sql, activity: summary.id)
             let records = try await recordRows(sql, activity: summary.id)

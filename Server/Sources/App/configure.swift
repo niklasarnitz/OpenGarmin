@@ -48,6 +48,7 @@ func configure(_ app: Application, config: ServerConfig) async throws {
     app.migrations.add(CreateRollups())
     app.migrations.add(CreateConnectArchive())
     app.migrations.add(CreateInsights())
+    app.migrations.add(AddRollupVersion())
 
     app.routes.defaultMaxBodySize = "512mb"
     app.http.server.configuration.hostname = "0.0.0.0"

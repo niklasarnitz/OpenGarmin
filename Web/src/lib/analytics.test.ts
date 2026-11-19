@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aggregate, baseline, changepoint, correlationMatrix, latest, recentVsBaseline, relate, rolling, trend, type Series } from "./analytics";
+import { aggregate, baseline, changepoint, correlationMatrix, latest, recentVsBaseline, relate, rolling, trend, yearlyMeans, type Series } from "./analytics";
 import { kendall, linearFit, mean, median, pearson, theilSen } from "./stats";
 import { addDays, daysBetween, daysInclusive, parseDay, type Day } from "./time";
 
@@ -172,5 +172,36 @@ describe("recentVsBaseline", () => {
 
   it("refuses to compare with too few days", () => {
     expect(recentVsBaseline(series(day("2024-01-01"), [1, 2, 3, 4, 5]), day("2024-01-05"))).toBeNull();
+  });
+});
+
+describe("yearlyMeans", () => {
+  it("averages each year's days, skips years without data and leaves missing concepts out", () => {
+    // Steps: two days in 2025 (mean 6,000, sum 12,000) and one in 2026. Weight only in 2026. Nothing in 2024.
+    const steps: Series = new Map([
+      [day("2025-03-01"), 4000],
+      [day("2025-09-01"), 8000],
+      [day("2026-01-02"), 10000],
+    ]);
+    const weight: Series = new Map([
+      [day("2026-02-01"), 80],
+      [day("2026-02-02"), 82],
+    ]);
+    const old: Series = new Map([[day("2023-06-01"), 1]]);
+    const rows = yearlyMeans({ steps, weight, old }, ["steps", "weight", "old"], 2026);
+    expect(rows).toEqual([
+      { year: 2026, means: { steps: 10000, weight: 81 } },
+      { year: 2025, means: { steps: 6000 } },
+      { year: 2023, means: { old: 1 } },
+    ]);
+  });
+
+  it("keeps at most `span` years up to the current year", () => {
+    const s: Series = new Map([
+      [day("2016-12-31"), 1],
+      [day("2017-01-01"), 2],
+      [day("2027-01-01"), 3],
+    ]);
+    expect(yearlyMeans({ s }, ["s"], 2026).map((r) => r.year)).toEqual([2017]);
   });
 });

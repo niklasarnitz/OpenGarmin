@@ -5,12 +5,16 @@ import type { ActivityRecord, ActivitySummary } from "../api/types";
 import { Chart } from "../components/Chart";
 import { palette, useDark } from "../components/theme";
 import { RouteMap } from "../components/RouteMap";
-import { Notice, Section, Stat } from "../components/ui";
-import { useAsync } from "../data";
+import { Notice, Section, Select, Stat } from "../components/ui";
+import { useAsync, useEarliestDay } from "../data";
 import { locale, sportKey, t, type Key } from "../i18n";
 import { fmt, fmtHM, fmtKm } from "../lib/format";
+import { todayDay, yearOf } from "../lib/time";
+import { sourceLabel } from "./shared";
 
 const MAX_HR = 190;
+/** The server caps a page at 200. A larger page keeps years of history a few clicks away. */
+const PAGE = 100;
 
 const stamp = (iso: string) =>
   new Date(iso).toLocaleString(locale, {
@@ -53,13 +57,18 @@ export function Activities() {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [year, setYear] = useState("");
+  const current = yearOf(todayDay());
+  const earliest = useEarliestDay();
+  const years = Array.from({ length: current - (earliest ? yearOf(earliest) : current) + 1 }, (_, i) => String(current - i));
 
-  function load(cursor?: string) {
+  /** A page before `cursor`, appended; without one, the newest page, replacing the list. */
+  function load(cursor?: string, append = cursor !== undefined) {
     setBusy(true);
     setFailed(false);
-    fetchActivities(20, cursor).then(
+    fetchActivities(PAGE, cursor).then(
       (page) => {
-        setItems((prev) => (cursor ? [...prev, ...page.items] : page.items));
+        setItems((prev) => (append ? [...prev, ...page.items] : page.items));
         setNext(page.nextCursor ?? null);
         setLoaded(true);
         setBusy(false);
@@ -75,6 +84,12 @@ export function Activities() {
     load();
   }, []);
 
+  // The server reads a day as the cursor too: activities that start before 1 January of the next year.
+  function jump(value: string) {
+    setYear(value);
+    load(value ? `${Number(value) + 1}-01-01` : undefined, false);
+  }
+
   if (failed && items.length === 0) {
     return (
       <Notice action={t("retry")} onAction={() => load()}>
@@ -84,7 +99,19 @@ export function Activities() {
   }
 
   return (
-    <Section title={t("acTitle")}>
+    <Section
+      title={t("acTitle")}
+      aside={
+        years.length > 1 ? (
+          <Select
+            label={t("acFromYear")}
+            value={year}
+            options={[{ value: "", label: t("acNewest") }, ...years.map((y) => ({ value: y, label: y }))]}
+            onChange={jump}
+          />
+        ) : undefined
+      }
+    >
       {loaded && items.length === 0 ? (
         <Notice>{t("acNone")}</Notice>
       ) : (
@@ -94,6 +121,7 @@ export function Activities() {
               <tr>
                 <th>{t("acDate")}</th>
                 <th>{t("acSport")}</th>
+                <th>{t("xpSource")}</th>
                 <th className="num">{t("acDistance")}</th>
                 <th className="num">{t("acDuration")}</th>
                 <th className="num">{t("acHr")}</th>
@@ -106,6 +134,7 @@ export function Activities() {
                     <a href={`#/activities/${encodeURIComponent(a.id)}`}>{stamp(a.start)}</a>
                   </td>
                   <td>{a.name || sportName(a.sport)}</td>
+                  <td className="muted">{sourceLabel(a.source)}</td>
                   <td className="num">{a.distance ? fmtKm(a.distance) : "–"}</td>
                   <td className="num">{fmtHM(a.duration / 60)}</td>
                   <td className="num">{a.averageHeartRate ? `${a.averageHeartRate} bpm` : "–"}</td>
@@ -141,6 +170,8 @@ export function ActivityDetail({ id }: { id: string }) {
     [records],
   );
   const zones = useMemo(() => zoneSeconds(records), [records]);
+  // Apple Health workouts carry a route at most, without heart rate.
+  const hasHeartRate = useMemo(() => records.some((r) => r.heartRate != null), [records]);
 
   const hrChart = useMemo((): EChartsCoreOption => {
     const axis = {
@@ -185,7 +216,7 @@ export function ActivityDetail({ id }: { id: string }) {
         <a href="#/activities">{t("acBack")}</a>
       </p>
 
-      <Section title={data.name || sportName(data.sport)} lead={`${sportName(data.sport)} · ${stamp(data.start)}`}>
+      <Section title={data.name || sportName(data.sport)} lead={`${sportName(data.sport)} · ${stamp(data.start)} · ${sourceLabel(data.source)}`}>
         <div className="stats">
           {data.distance ? <Stat label={t("acDistance")} value={fmtKm(data.distance)} /> : null}
           <Stat label={t("acDuration")} value={fmtHM(data.duration / 60)} />
@@ -206,7 +237,13 @@ export function ActivityDetail({ id }: { id: string }) {
         )}
       </Section>
 
-      {records.length > 0 && (
+      {records.length > 0 && !hasHeartRate && (
+        <Section title={t("acHrChart")}>
+          <Notice>{t("acNoHr")}</Notice>
+        </Section>
+      )}
+
+      {hasHeartRate && (
         <Section title={t("acHrChart")}>
           <Chart option={hrChart} height={220} label={t("acHrChart")} />
           <div className="zones">

@@ -1,7 +1,9 @@
 // Deterministic fixtures for mock mode (?mock or VITE_MOCK=1). Shapes match docs/backend-api.md. The data has
 // a seasonal step count, a slowly falling resting heart rate, sleep that predicts next-day HRV and stress, a
 // bedtime that drifts later, a Garmin gap in early 2022 (Apple Health fills it), and two step sources. Garmin
-// samples are mirrored into HealthKit from the watch's arrival on, which the server marks as garmin-mirror.
+// samples are mirrored into HealthKit from the watch's arrival on, which the server marks as garmin-mirror. Before
+// the watch and in the gap, Apple Health has nights without stages ("asleep") and Google Fit has walks and rides
+// without heart rate, some with a route.
 
 import type {
   ActivityDetail,
@@ -19,7 +21,7 @@ import type {
 } from "./api/types";
 import type { Insight } from "./api/types";
 import { records, relate, trend, type Series } from "./lib/analytics";
-import { addDays, dayMs, dayOfYear, daysInclusive, todayDay, weekdayIndex, type Day } from "./lib/time";
+import { addDays, dayMs, dayOf, dayOfYear, daysInclusive, parseDay, todayDay, weekdayIndex, type Day } from "./lib/time";
 
 export const me: MeResponse = {
   id: "demo",
@@ -35,10 +37,15 @@ const START = "2019-03-01" as Day;
 const WATCH_FROM = "2021-07-01" as Day;
 const GAP = ["2022-02-10", "2022-03-05"] as [Day, Day];
 const APPLE = "healthkit:com.apple.health";
+const APPLE_WATCH = "healthkit:com.apple.health.5F3A1C2E-0D4B-4E7A-9C61-2B8D7E4F1A90";
 const MIRROR = "healthkit:garmin-mirror";
+const GOOGLE_FIT = "healthkit:com.google.android.apps.fitness";
+const HEALTH_FROM = "2020-01-01" as Day;
 const HK_STEPS = "HKQuantityTypeIdentifierStepCount";
 const HK_RHR = "HKQuantityTypeIdentifierRestingHeartRate";
 const HK_HRV = "HKQuantityTypeIdentifierHeartRateVariabilitySDNN";
+const HK_WEIGHT = "HKQuantityTypeIdentifierBodyMass";
+const HK_BMI = "HKQuantityTypeIdentifierBodyMassIndex";
 
 const META: Record<string, { unit: string; aggregation: Aggregation }> = {
   steps: { unit: "count", aggregation: "sum" },
@@ -54,6 +61,15 @@ const META: Record<string, { unit: string; aggregation: Aggregation }> = {
   [HK_STEPS]: { unit: "count", aggregation: "sum" },
   [HK_RHR]: { unit: "bpm", aggregation: "avg" },
   [HK_HRV]: { unit: "ms", aggregation: "avg" },
+  heartRate: { unit: "bpm", aggregation: "avg" },
+  restingEnergy: { unit: "kcal", aggregation: "sum" },
+  activityMinutes: { unit: "min", aggregation: "sum" },
+  sleepDeepMinutes: { unit: "min", aggregation: "sum" },
+  sleepLightMinutes: { unit: "min", aggregation: "sum" },
+  sleepRemMinutes: { unit: "min", aggregation: "sum" },
+  sleepAwakeMinutes: { unit: "min", aggregation: "sum" },
+  [HK_WEIGHT]: { unit: "kg", aggregation: "avg" },
+  [HK_BMI]: { unit: "count", aggregation: "avg" },
 };
 
 // MARK: - Random numbers
@@ -92,14 +108,18 @@ interface Row {
   resp: number;
   sleepMin: number;
   sleep?: SleepSession;
+  weight?: number;
 }
 
 interface Summary {
   activity: ActivitySummary;
   seed: number;
   speed: number;
-  hr: number;
+  /** Undefined for a Health workout, which has no heart rate and no laps. */
+  hr: number | undefined;
   cadence: number | undefined;
+  /** False for a Health workout recorded without a route. */
+  route: boolean;
 }
 
 interface Dataset {
@@ -161,6 +181,7 @@ function dataset(): Dataset {
       spo2: clamp(96.5 + 0.9 * gauss(), 90, 100),
       resp: clamp(14.6 + 0.6 * gauss(), 10, 22),
       sleepMin,
+      weight: day >= HEALTH_FROM && rand() < 0.3 ? round1(82 - 1.2 * years + 0.8 * season + 0.6 * gauss()) : undefined,
     };
 
     if (watch) {
@@ -173,9 +194,53 @@ function dataset(): Dataset {
         end: new Date(start.getTime() + sleepMin * 60_000).toISOString(),
         stages: stages(start, sleepMin, rand),
         score: clamp(Math.round(60 + (sleepMin - 380) / 6 + 5 * gauss()), 40, 98),
+        source: "garmin",
+      };
+    } else if (day >= HEALTH_FROM && rand() < 0.7) {
+      // An Apple Watch night: asleep or awake, no stages, no score.
+      const bedMin = Math.round(23 * 60 + 25 + 25 * gauss());
+      const start = new Date(y0(day), m0(day) - 1, d0(day) - 1, 0, bedMin);
+      const asleepEnd = start.getTime() + sleepMin * 60_000;
+      const awake = Math.round(5 + 10 * rand());
+      row.sleep = {
+        start: start.toISOString(),
+        end: new Date(asleepEnd + awake * 60_000).toISOString(),
+        stages: [
+          { start: start.toISOString(), end: new Date(asleepEnd).toISOString(), stage: "asleep" },
+          { start: new Date(asleepEnd).toISOString(), end: new Date(asleepEnd + awake * 60_000).toISOString(), stage: "awake" },
+        ],
+        source: APPLE_WATCH,
       };
     }
     rows.push(row);
+
+    if (!watch && rand() < 0.2) {
+      // A Google Fit walk or ride; about half carry a route.
+      const ride = rand() < 0.3;
+      const index = summaries.length + 1;
+      const duration = Math.round(ride ? between(1800, 5400) : between(1200, 3600));
+      const speed = ride ? between(4.5, 6.5) : between(1.2, 1.5);
+      const start = new Date(y0(day), m0(day) - 1, d0(day), 8 + Math.floor(between(0, 11)), Math.floor(between(0, 60)));
+      summaries.push({
+        activity: {
+          id: `hk-${String(index).padStart(4, "0")}`,
+          externalId: `hk-uuid-${index}`,
+          source: GOOGLE_FIT,
+          sport: ride ? 2 : 11,
+          start: start.toISOString(),
+          end: new Date(start.getTime() + duration * 1000).toISOString(),
+          duration,
+          distance: Math.round(speed * duration),
+          activeCalories: Math.round((duration / 60) * (ride ? 7 : 4)),
+          averageSpeed: Math.round(speed * 100) / 100,
+        },
+        seed: index * 977 + 13,
+        speed,
+        hr: undefined,
+        cadence: undefined,
+        route: rand() < 0.5,
+      });
+    }
 
     if (watch && rand() < 0.38) {
       let pick = rand();
@@ -190,6 +255,7 @@ function dataset(): Dataset {
         activity: {
           id: `act-${String(index).padStart(4, "0")}`,
           externalId: `mock-${index}`,
+          source: "garmin",
           sport: spec.sport,
           start: start.toISOString(),
           end: end.toISOString(),
@@ -206,6 +272,7 @@ function dataset(): Dataset {
         speed,
         hr,
         cadence: spec.sport === 1 ? Math.round(between(165, 176)) : spec.sport === 2 ? Math.round(between(85, 95)) : undefined,
+        route: true,
       });
     }
   });
@@ -219,9 +286,33 @@ function dataset(): Dataset {
     }
     points.push(point);
   };
+  const activityMinutes = new Map<Day, { source: string; minutes: number }>();
+  for (const { activity } of summaries) {
+    const day = dayOfIso(activity.start);
+    const prior = activityMinutes.get(day)?.minutes ?? 0;
+    activityMinutes.set(day, { source: activity.source, minutes: prior + activity.duration / 60 });
+  }
   for (const row of rows) {
     const { day } = row;
+    const night = row.sleep && sleepMinutesByStage(row.sleep);
+    if (row.sleep?.source === "garmin" && night) {
+      add(day, "sleepDeepMinutes", "garmin", night.deep);
+      add(day, "sleepLightMinutes", "garmin", night.light);
+      add(day, "sleepRemMinutes", "garmin", night.rem);
+      add(day, "sleepAwakeMinutes", "garmin", night.awake);
+    } else if (row.sleep && night) {
+      add(day, "sleepMinutes", row.sleep.source, night.asleep);
+      add(day, "sleepAwakeMinutes", row.sleep.source, night.awake);
+    }
+    const workouts = activityMinutes.get(day);
+    if (workouts) add(day, "activityMinutes", workouts.source, workouts.minutes);
+    if (row.weight !== undefined) {
+      add(day, HK_WEIGHT, APPLE, row.weight);
+      add(day, HK_BMI, APPLE, row.weight / (1.78 * 1.78));
+    }
     if (row.watch) {
+      add(day, "heartRate", "garmin", row.rhr + 16 + 2 * Math.sin(dayOfYear(day)));
+      add(day, "restingEnergy", "garmin", 1720 - 4 * (row.rhr - 55));
       add(day, "steps", "garmin", row.steps);
       add(day, "activeEnergy", "garmin", row.activeEnergy);
       add(day, "intensityMinutes", "garmin", row.intensity);
@@ -240,6 +331,14 @@ function dataset(): Dataset {
   }
   cache = { rows, points, summaries };
   return cache;
+}
+
+const dayOfIso = (iso: string): Day => dayOf(new Date(iso));
+
+function sleepMinutesByStage(session: SleepSession): Record<SleepStage, number> {
+  const out: Record<SleepStage, number> = { awake: 0, light: 0, deep: 0, rem: 0, asleep: 0, unmeasurable: 0 };
+  for (const iv of session.stages) out[iv.stage] += (Date.parse(iv.end) - Date.parse(iv.start)) / 60_000;
+  return out;
 }
 
 const y0 = (day: Day) => Number(day.slice(0, 4));
@@ -275,6 +374,7 @@ function stages(start: Date, total: number, rand: () => number): SleepInterval[]
 function expand(summary: Summary): { records: ActivityRecord[]; laps: Lap[] } {
   const rand = mulberry32(summary.seed);
   const { activity, speed, hr, cadence } = summary;
+  if (!summary.route) return { records: [], laps: [] };
   const startMs = Date.parse(activity.start);
   let lat = 52.5 + (rand() - 0.5) * 0.12;
   let lon = 13.4 + (rand() - 0.5) * 0.2;
@@ -291,8 +391,19 @@ function expand(summary: Summary): { records: ActivityRecord[]; laps: Lap[] } {
     dist += v * 10;
     lat += (v * 10 * Math.cos(heading)) / 111_320;
     lon += (v * 10 * Math.sin(heading)) / (111_320 * Math.cos((lat * Math.PI) / 180));
-    const heartRate = Math.round(hr + 8 * Math.sin(t / 300) + 4 * (rand() - 0.5));
     const date = new Date(startMs + t * 1000).toISOString();
+    if (hr === undefined) {
+      // A Health route point: position, altitude and speed only.
+      records.push({
+        date,
+        latitude: Math.round(lat * 1e6) / 1e6,
+        longitude: Math.round(lon * 1e6) / 1e6,
+        altitude: round1(60 + 25 * Math.sin(t / 900) + 4 * (rand() - 0.5)),
+        speed: round1(v * 100) / 100,
+      });
+      continue;
+    }
+    const heartRate = Math.round(hr + 8 * Math.sin(t / 300) + 4 * (rand() - 0.5));
     records.push({
       date,
       latitude: Math.round(lat * 1e6) / 1e6,
@@ -352,12 +463,16 @@ export function sleep(from: Day, to: Day): SleepSession[] {
     .filter((s) => Date.parse(s.start) >= lo && Date.parse(s.start) < hi);
 }
 
+/** Newest first. Like the server, the cursor is an instant or a day, and a page holds the activities that start before it. */
 export function activities(limit: number, cursor?: string): ActivityPage {
-  const sorted = dataset().summaries.map((s) => s.activity).reverse();
-  const offset = Number(cursor ?? 0);
-  const items = sorted.slice(offset, offset + limit);
-  const next = offset + limit;
-  return { items, nextCursor: next < sorted.length ? String(next) : undefined };
+  const day = parseDay(cursor);
+  const before = cursor === undefined ? Infinity : day ? dayMs(day) : Date.parse(cursor);
+  const sorted = dataset()
+    .summaries.map((s) => s.activity)
+    .filter((a) => Date.parse(a.start) < before)
+    .reverse();
+  const items = sorted.slice(0, limit);
+  return { items, nextCursor: sorted.length > limit ? items.at(-1)?.start : undefined };
 }
 
 export function activity(id: string): ActivityDetail {

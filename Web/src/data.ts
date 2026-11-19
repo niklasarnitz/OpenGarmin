@@ -105,6 +105,16 @@ export function useEarliestDay(): Day | undefined {
   return catalog.data?.reduce<Day | undefined>((min, m) => (min === undefined || m.first < min ? m.first : min), undefined);
 }
 
+/** The concepts the server holds any data for, in catalogue order; every concept until the catalogue has loaded. */
+export function useHeldConcepts(): ConceptId[] {
+  const catalog = useCatalog();
+  return useMemo(() => {
+    if (!catalog.data) return CONCEPT_IDS;
+    const held = new Set(catalog.data.map((m) => conceptOf(m.metric)));
+    return CONCEPT_IDS.filter((id) => held.has(id));
+  }, [catalog.data]);
+}
+
 type Tagged = SourcedValue & { concept: ConceptId };
 
 export interface Resolved {

@@ -3,7 +3,7 @@ import type { EChartsCoreOption } from "echarts/core";
 import { Chart } from "../components/Chart";
 import { palette, useDark } from "../components/theme";
 import { Notice, Section, Segmented, Stat } from "../components/ui";
-import { useEarliestDay, useSeries } from "../data";
+import { useEarliestDay, useHeldConcepts, useSeries } from "../data";
 import { locale, t } from "../i18n";
 import { fmtDay } from "../lib/format";
 import { aggregate, byYear, monthOf, profile, records, rolling, weekdayOf, type Gran } from "../lib/analytics";
@@ -59,6 +59,7 @@ export function Metrics({ query }: { query: URLSearchParams }) {
   const p = palette(useDark());
   const today = todayDay();
   const earliest = useEarliestDay();
+  const held = useHeldConcepts();
   const range = custom ?? { from: presetStart(preset, today, earliest), to: today };
   const { series, loading, error, retry } = useSeries([id], range.from, range.to);
   const concept = CONCEPTS[id];
@@ -164,7 +165,7 @@ export function Metrics({ query }: { query: URLSearchParams }) {
   return (
     <>
       <div className="chips" role="group" aria-label={t("xpTitle")}>
-        {CONCEPT_IDS.map((c) => (
+        {CONCEPT_IDS.filter((c) => c === id || held.includes(c)).map((c) => (
           <button key={c} type="button" aria-pressed={c === id} onClick={() => setId(c)}>
             {conceptName(c)}
           </button>

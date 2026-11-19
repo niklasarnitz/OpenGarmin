@@ -559,6 +559,24 @@ td a:hover {
   font-size: 26px;
 }
 
+.years-wrap {
+  overflow-x: auto;
+}
+
+table.years th,
+table.years td {
+  white-space: nowrap;
+}
+
+table.years .num {
+  padding-left: 16px;
+}
+
+table.years .stat-note {
+  font-size: 12px;
+  margin-top: 2px;
+}
+
 table.sources td,
 table.sources th {
   padding-top: 12px;

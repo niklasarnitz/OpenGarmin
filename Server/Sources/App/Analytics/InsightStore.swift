@@ -75,7 +75,12 @@ enum InsightStore {
             WHERE user_id = \(bind: userID) AND end_ts >= \(bind: instant(range.lowerBound, calendar))
                 AND end_ts < \(bind: instant(range.upperBound + 1, calendar))
             """).all(decoding: SessionRow.self)
-        input.nights = sessions.map { session in
+        // Health nights fill the nights Garmin lacks (older years, other watches and apps).
+        let lower = instant(range.lowerBound, calendar), upper = instant(range.upperBound + 1, calendar)
+        let health = try await HealthSleep.nights(sql, userID: userID, from: lower.addingTimeInterval(-86_400), to: upper)
+            .filter { $0.end >= lower && $0.end < upper }
+            .map { SessionRow(start: $0.start, end: $0.end) }
+        input.nights = (sessions + health).map { session in
             let wake = calendar.dateComponents([.year, .month, .day], from: session.end)
             let bed = calendar.dateComponents([.hour, .minute], from: session.start)
             // Bedtime in minutes after 18:00, so a night from 23:30 to 07:00 sits at 330 and never wraps.
@@ -91,6 +96,10 @@ enum InsightStore {
             SELECT start_ts AS "start", duration FROM activities
             WHERE user_id = \(bind: userID) AND start_ts >= \(bind: instant(range.lowerBound, calendar))
                 AND start_ts < \(bind: instant(range.upperBound + 1, calendar))
+            UNION ALL
+            SELECT w.start_ts AS "start", w.duration FROM healthkit_workouts w
+            WHERE w.user_id = \(bind: userID) AND w.start_ts >= \(bind: instant(range.lowerBound, calendar))
+                AND w.start_ts < \(bind: instant(range.upperBound + 1, calendar)) AND \(unsafeRaw: HealthSleep.workoutNotOnGarmin)
             """).all(decoding: ActivityRow.self)
         var training: DailySeries = [:]
         for activity in activities {

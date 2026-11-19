@@ -43,8 +43,12 @@ export const DailyPoint = z.object({
   count: z.number().int(),
 });
 
+/** Where a night or workout comes from: "garmin", "healthkit:garmin-mirror" or "healthkit:<bundle id>". Older servers leave it out. */
+const source = z.string().default("garmin");
+
 export const ActivitySummary = z.object({
   id: z.string(),
+  source,
   externalId: z.string(),
   sport: z.number().int(),
   subSport: opt(z.number().int()),
@@ -96,9 +100,11 @@ export const ActivityDetail = z.object({
   records: z.array(ActivityRecord),
 });
 
-export const SleepStage = z.enum(["awake", "light", "deep", "rem", "unmeasurable"]);
+/** "asleep": asleep with the stage unknown, as older devices and most Apple Health nights report it. */
+export const SleepStage = z.enum(["awake", "light", "deep", "rem", "asleep", "unmeasurable"]);
 
 export const SleepSession = z.object({
+  source,
   start: instant,
   end: instant,
   score: opt(z.number().int()),
