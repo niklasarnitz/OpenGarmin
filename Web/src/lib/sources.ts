@@ -5,6 +5,8 @@ import type { Day } from "./time";
 export const MIRROR_SOURCE = "healthkit:garmin-mirror";
 /** Every iPhone and Apple Watch, which the server lists one by one as `healthkit:com.apple.health.<device>`. */
 export const APPLE_SOURCE = "healthkit:apple";
+/** Google Fit, imported from a Takeout export: like Apple's devices, it counts with the phone's and watch's sensors. */
+export const GOOGLE_FIT_SOURCE = "healthkit:com.google.android.apps.fitness";
 
 export interface SourcedValue {
   day: Day;
@@ -20,12 +22,12 @@ export function sourceGroup(source: string): string {
 }
 
 const rank = (group: string, preferred: string | undefined) =>
-  group === preferred ? 0 : group === "garmin" ? 1 : group === MIRROR_SOURCE ? 2 : group === APPLE_SOURCE ? 3 : 4;
+  group === preferred ? 0 : group === "garmin" ? 1 : group === MIRROR_SOURCE ? 2 : group === APPLE_SOURCE || group === GOOGLE_FIT_SOURCE ? 3 : 4;
 
 /**
  * Exactly one value per day, never a sum of sources, because Garmin data also reaches Apple Health (through Garmin
  * Connect and OpenGarmin) and an iPhone and an Apple Watch both count the same steps. The preferred source wins, then
- * Garmin, then Garmin's copy in Apple Health, then Apple's devices, then other apps. Within one of these, the source
+ * Garmin, then Garmin's copy in Apple Health, then Apple's devices and Google Fit, then other apps. Within one of these, the source
  * with the most readings that day wins. A lower-ranked source fills the days the better ones lack.
  */
 export function resolveSeries(values: readonly SourcedValue[], preferred: string | undefined): Series {

@@ -2,7 +2,7 @@ import { t, type Key } from "../i18n";
 import { CONCEPTS, type ConceptId } from "../lib/concepts";
 import { fmt } from "../lib/format";
 import { parseDay, type Day, type Preset } from "../lib/time";
-import { APPLE_SOURCE, MIRROR_SOURCE, sourceGroup } from "../lib/sources";
+import { APPLE_SOURCE, GOOGLE_FIT_SOURCE, MIRROR_SOURCE, sourceGroup } from "../lib/sources";
 
 /** A custom period from the URL (?from=&to=), as the findings link to. Null when absent or malformed. */
 export function rangeFromQuery(query: URLSearchParams): { from: Day; to: Day } | null {
@@ -31,6 +31,7 @@ export function sourceLabel(source: string): string {
   if (source === "garmin") return t("src_garmin");
   if (source === MIRROR_SOURCE) return t("src_mirror");
   if (sourceGroup(source) === APPLE_SOURCE) return t("src_apple");
+  if (source === GOOGLE_FIT_SOURCE) return "Google Fit";
   // Another app that writes into Apple Health: its bundle ID.
   return source.replace(/^healthkit:/, "");
 }

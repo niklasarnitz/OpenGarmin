@@ -19,6 +19,11 @@ const values: SourcedValue[] = [
   v("2024-01-03", "healthkit:com.apple.health.PHONE", 3000, 100),
   v("2024-01-03", "healthkit:com.apple.health.WATCH", 3500, 900),
   v("2024-01-03", "healthkit:com.yazio.ios.YAZIO", 9999, 2000),
+  // Google Fit ranks with Apple's devices: the fuller one wins, so a few stray iPhone steps do not hide it.
+  v("2024-01-04", "healthkit:com.apple.health.PHONE", 200, 4),
+  v("2024-01-04", "healthkit:com.google.android.apps.fitness", 6800, 40),
+  v("2024-01-05", "healthkit:com.apple.health.WATCH", 8000, 900),
+  v("2024-01-05", "healthkit:com.google.android.apps.fitness", 6000, 40),
 ];
 
 describe("resolveSeries", () => {
@@ -27,6 +32,8 @@ describe("resolveSeries", () => {
       "2024-01-01": 5000,
       "2024-01-02": 7000,
       "2024-01-03": 3500,
+      "2024-01-04": 6800,
+      "2024-01-05": 8000,
     });
   });
 
