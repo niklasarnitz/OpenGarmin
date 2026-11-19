@@ -12,6 +12,9 @@ enum LiveSync {
     private static var watch: (any WatchService)?
     /// `Activity` is not Sendable, so it is only touched from the nonisolated helpers below, never sent between actors.
     nonisolated(unsafe) private static var activity: ActivityKit.Activity<SyncActivityAttributes>?
+    /// The last queued update. Each update waits for the one before, so two quick state changes cannot both see no
+    /// activity and request two (the first one would then be orphaned, stuck on "Listing activities").
+    private static var lastUpdate: Task<Void, Never>?
 
     static func start(_ watch: any WatchService) {
         self.watch = watch
@@ -39,7 +42,11 @@ enum LiveSync {
         withObservationTracking {
             let state = watch.state
             let watchName = watch.pairedWatch?.name ?? "Garmin watch"
-            Task { await showSync(state, watchName: watchName) }
+            let previous = lastUpdate
+            lastUpdate = Task {
+                await previous?.value
+                await showSync(state, watchName: watchName)
+            }
         } onChange: {
             Task { @MainActor in trackSync() }
         }
@@ -47,8 +54,9 @@ enum LiveSync {
 
     nonisolated private static func showSync(_ state: WatchConnectionState, watchName: String) async {
         guard case let .syncing(progress, detail) = state else {
-            if let ended = activity {
-                activity = nil
+            activity = nil
+            // Every activity of this type, so one orphaned by an earlier build or a lost race ends too.
+            for ended in ActivityKit.Activity<SyncActivityAttributes>.activities {
                 await ended.end(nil, dismissalPolicy: .after(.now.addingTimeInterval(5)))
             }
             return
