@@ -12,7 +12,6 @@ import { addDays, type Day } from "./lib/time";
 
 const SourcePrefsSchema = z.object({
   preferred: z.partialRecord(z.enum(CONCEPT_IDS as [ConceptId, ...ConceptId[]]), z.string()).catch({}),
-  includeMirror: z.boolean().catch(false),
 });
 
 export type SourcePrefs = z.infer<typeof SourcePrefsSchema>;
@@ -25,7 +24,7 @@ const readPrefs = (): SourcePrefs => {
   } catch {
     // Unreadable storage falls back to the defaults.
   }
-  return { preferred: {}, includeMirror: false };
+  return { preferred: {} };
 };
 
 let prefs = readPrefs();
@@ -132,7 +131,8 @@ export function useSeries(ids: readonly ConceptId[], from: Day, to: Day): Resolv
         : fetchDaily(from, addDays(to, 1), keys).then((points) =>
             points.flatMap((p) => {
               const id = conceptOf(p.metric);
-              return id ? [{ day: p.day, source: p.source, value: p.value, concept: id }] : [];
+              const value = p.value * (id ? (CONCEPTS[id].scale?.[p.metric] ?? 1) : 1);
+              return id ? [{ day: p.day, source: p.source, value, count: p.count, concept: id }] : [];
             }),
           ),
     `${keys.join(",")}|${from}|${to}|${catalog.data ? "ready" : "waiting"}`,
@@ -142,12 +142,12 @@ export function useSeries(ids: readonly ConceptId[], from: Day, to: Day): Resolv
   const resolved = useMemo(() => {
     const byConcept = new Map<ConceptId, SourcedValue[]>();
     for (const v of raw.data ?? []) {
-      byConcept.set(v.concept, [...(byConcept.get(v.concept) ?? []), { day: v.day, source: v.source, value: v.value }]);
+      byConcept.set(v.concept, [...(byConcept.get(v.concept) ?? []), { day: v.day, source: v.source, value: v.value, count: v.count }]);
     }
     const series = Object.fromEntries(CONCEPT_IDS.map((id) => [id, new Map()])) as Record<ConceptId, Series>;
     const sources: Partial<Record<ConceptId, string[]>> = {};
     for (const [id, values] of byConcept) {
-      series[id] = resolveSeries(values, current.preferred[id], current.includeMirror);
+      series[id] = resolveSeries(values, current.preferred[id]);
       sources[id] = sourcesOf(values);
     }
     return { series, sources };

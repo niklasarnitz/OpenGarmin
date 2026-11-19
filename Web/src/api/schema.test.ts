@@ -39,7 +39,7 @@ describe("server responses", () => {
 
   it("parse a metric without a unit and daily values without min and max", () => {
     expect(S.MetricInfo.parse({ metric: "floors", source: "garmin", aggregation: "sum", first: "2024-01-01", last: "2026-11-18", count: 3 }).unit).toBeUndefined();
-    expect(S.DailyPoint.parse({ day: "2026-11-18", metric: "steps", source: "garmin", value: 9000 }).min).toBeUndefined();
+    expect(S.DailyPoint.parse({ day: "2026-11-18", metric: "steps", source: "garmin", value: 9000, count: 96 }).min).toBeUndefined();
   });
 
   it("parse a trend insight whose chart x values are epoch milliseconds", () => {
@@ -53,8 +53,8 @@ describe("server responses", () => {
 
   it("reject a shape that drifted, such as sleep under the old `intervals` name", () => {
     expect(S.SleepSession.safeParse({ start: "2026-11-17T22:41:00Z", end: "2026-11-18T06:02:00Z", intervals: [] }).success).toBe(false);
-    expect(S.DailyPoint.safeParse({ day: "2026-11-31", metric: "steps", source: "garmin", value: 1 }).success).toBe(false);
-    expect(S.DailyPoint.safeParse({ day: "18.11.2026", metric: "steps", source: "garmin", value: 1 }).success).toBe(false);
+    expect(S.DailyPoint.safeParse({ day: "2026-11-31", metric: "steps", source: "garmin", value: 1, count: 1 }).success).toBe(false);
+    expect(S.DailyPoint.safeParse({ day: "18.11.2026", metric: "steps", source: "garmin", value: 1, count: 1 }).success).toBe(false);
   });
 });
 

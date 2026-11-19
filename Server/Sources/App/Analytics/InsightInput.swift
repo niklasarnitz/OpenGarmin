@@ -30,14 +30,17 @@ struct InsightInput: Sendable {
 
 /// Chooses one source value per metric and day, from the rollup rows.
 enum InsightSources {
-    /// Apple Health identifiers that stand for a Garmin metric.
-    static let aliases: [String: String] = [
-        "HKQuantityTypeIdentifierStepCount": "steps",
-        "HKQuantityTypeIdentifierActiveEnergyBurned": "activeEnergy",
-        "HKQuantityTypeIdentifierRestingHeartRate": "restingHeartRate",
-        "HKQuantityTypeIdentifierHeartRateVariabilitySDNN": "hrv",
-        "HKQuantityTypeIdentifierOxygenSaturation": "spo2",
-        "HKQuantityTypeIdentifierRespiratoryRate": "respiration",
+    /// Apple Health identifiers that stand for a Garmin metric, with the factor that converts to the Garmin unit.
+    static let aliases: [String: (name: String, scale: Double)] = [
+        "HKQuantityTypeIdentifierStepCount": ("steps", 1),
+        "HKQuantityTypeIdentifierActiveEnergyBurned": ("activeEnergy", 1),
+        "HKQuantityTypeIdentifierRestingHeartRate": ("restingHeartRate", 1),
+        "HKQuantityTypeIdentifierHeartRateVariabilitySDNN": ("hrv", 1),
+        "HKQuantityTypeIdentifierOxygenSaturation": ("spo2", 1),
+        "HKQuantityTypeIdentifierRespiratoryRate": ("respiration", 1),
+        // Apple Health distance is in km (the phone's preferred unit), Garmin's in m.
+        "HKQuantityTypeIdentifierDistanceWalkingRunning": ("distance", 1000),
+        "HKQuantityTypeIdentifierFlightsClimbed": ("floors", 1),
     ]
 
     /// One rollup row: a metric's value on a day from one source.
@@ -49,23 +52,27 @@ enum InsightSources {
         let count: Int
     }
 
-    /// Garmin wins over Apple Health on a day. Among Apple Health sources the one with the most readings wins. Data
-    /// the server mirrored from Garmin (`healthkit:garmin-mirror`) is never used, because Garmin already counts it.
+    /// Exactly one source per metric and day, so nothing is counted twice: Garmin, then what Garmin Connect or the app
+    /// wrote into Apple Health (`healthkit:garmin-mirror`, a copy of Garmin data, so only for days Garmin itself lacks),
+    /// then the Apple Health source with the most readings that day.
     static func resolve(_ rows: [Row]) -> [String: DailySeries] {
         var chosen: [String: [Int: (rank: Int, count: Int, value: Double)]] = [:]
         for row in rows {
             let rank: Int
             if row.source == "garmin" {
+                rank = 3
+            } else if row.source == "healthkit:garmin-mirror" {
                 rank = 2
-            } else if row.source.hasPrefix("healthkit:"), row.source != "healthkit:garmin-mirror" {
+            } else if row.source.hasPrefix("healthkit:") {
                 rank = 1
             } else {
                 continue
             }
-            let name = aliases[row.metric] ?? row.metric
+            let alias = aliases[row.metric]
+            let name = alias?.name ?? row.metric
             let current = chosen[name]?[row.day]
             if current == nil || (rank, row.count) > (current!.rank, current!.count) {
-                chosen[name, default: [:]][row.day] = (rank, row.count, row.value)
+                chosen[name, default: [:]][row.day] = (rank, row.count, row.value * (alias?.scale ?? 1))
             }
         }
         return chosen.mapValues { days in days.mapValues { $0.value } }

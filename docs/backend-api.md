@@ -83,7 +83,7 @@ do not duplicate either. Responses are `{id, key, sha256, duplicate}`. The reque
     `[{start, count, avg, min, max, sum}]`. `sum` applies to intervals and `avg`, `min`, `max` to readings.
 - `GET /api/v1/metrics` → `[{metric, source, unit, aggregation, first, last, count}]`: one entry per metric and
   source. `aggregation` is `sum` for amounts per day and `avg` for readings. `first` and `last` are days.
-- `GET /api/v1/metrics/daily?from&to&metrics=a,b,c` → `[{day, metric, source, value, min?, max?}]`, one row per day,
+- `GET /api/v1/metrics/daily?from&to&metrics=a,b,c` → `[{day, metric, source, value, min?, max?, count}]` (`count`: samples behind the value), one row per day,
   metric and source. `to` is exclusive. `value` is the day's sum for `sum` metrics and the average for readings, with
   `min` and `max`. Metrics are the Garmin names above, plus `sleepMinutes`, `sleepDeepMinutes`, `sleepLightMinutes`,
   `sleepRemMinutes`, `sleepAwakeMinutes`, `activityMinutes`, and every Apple Health quantity type by its identifier.

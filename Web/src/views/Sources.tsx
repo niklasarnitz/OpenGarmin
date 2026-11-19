@@ -5,6 +5,8 @@ import { t } from "../i18n";
 import { fmtDay } from "../lib/format";
 import { CONCEPT_IDS, conceptOf, type ConceptId } from "../lib/concepts";
 import { conceptName, sourceLabel } from "./shared";
+import { sourceGroup } from "../lib/sources";
+import type { Day } from "../lib/time";
 
 export function Sources() {
   const catalog = useCatalog();
@@ -13,7 +15,18 @@ export function Sources() {
   const rows = useMemo(
     () =>
       CONCEPT_IDS.flatMap((id) => {
-        const metrics = (catalog.data ?? []).filter((m) => conceptOf(m.metric) === id);
+        // One row per source group (all Apple devices together), spanning its earliest to latest day.
+        const groups = new Map<string, { source: string; first: Day; last: Day }>();
+        for (const m of (catalog.data ?? []).filter((m) => conceptOf(m.metric) === id)) {
+          const source = sourceGroup(m.source);
+          const g = groups.get(source);
+          groups.set(source, {
+            source,
+            first: g && g.first < m.first ? g.first : m.first,
+            last: g && g.last > m.last ? g.last : m.last,
+          });
+        }
+        const metrics = [...groups.values()].sort((a, b) => a.source.localeCompare(b.source));
         return metrics.length > 0 ? [{ id, metrics }] : [];
       }),
     [catalog.data],
@@ -37,16 +50,6 @@ export function Sources() {
 
   return (
     <Section title={t("srTitle")} lead={t("srLead")}>
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={prefs.includeMirror}
-          onChange={(e) => updatePrefs({ includeMirror: e.target.checked })}
-        />
-        {t("srMirrorOn")}
-      </label>
-      <p className="lead">{t("srMirrorNote")}</p>
-
       <table className="sources">
         <thead>
           <tr>

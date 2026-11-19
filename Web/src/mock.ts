@@ -212,7 +212,7 @@ function dataset(): Dataset {
 
   const points: DailyPoint[] = [];
   const add = (day: Day, metric: string, source: string, value: number, range?: [number, number]) => {
-    const point: DailyPoint = { day, metric, source, value: round1(value) };
+    const point: DailyPoint = { day, metric, source, value: round1(value), count: 1 };
     if (range) {
       point.min = round1(range[0]);
       point.max = round1(range[1]);

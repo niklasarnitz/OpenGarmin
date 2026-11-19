@@ -128,7 +128,7 @@ enum Rollup {
     static func daily(_ req: Request, user: AuthenticatedUser, window: Reads.Window, metrics: [String]) async throws -> [MetricDay] {
         let zone = user.timeZone
         let rows = try await req.sql.raw("""
-            SELECT to_char(day, 'YYYY-MM-DD') AS day, metric, source, value, min, max FROM metric_daily
+            SELECT to_char(day, 'YYYY-MM-DD') AS day, metric, source, value, min, max, count FROM metric_daily
             WHERE user_id = \(bind: user.id)
               AND day >= (\(bind: window.from)::timestamptz AT TIME ZONE \(bind: zone)::text)::date
               AND day < (\(bind: window.to)::timestamptz AT TIME ZONE \(bind: zone)::text)::date
@@ -138,7 +138,7 @@ enum Rollup {
         return rows.map { row in
             let reading = !isSummed(row.metric)
             return MetricDay(day: row.day, metric: row.metric, source: row.source, value: row.value,
-                             min: reading ? row.min : nil, max: reading ? row.max : nil)
+                             min: reading ? row.min : nil, max: reading ? row.max : nil, count: row.count)
         }
     }
 }
@@ -162,6 +162,8 @@ struct MetricDay: Content {
     let value: Double
     let min: Double?
     let max: Double?
+    /// Number of underlying samples, so a client can pick the fullest of several sources on a day.
+    let count: Int
 }
 
 private struct Bounds: Decodable {
@@ -185,4 +187,5 @@ private struct DailyRow: Decodable {
     let value: Double
     let min: Double?
     let max: Double?
+    let count: Int
 }

@@ -39,6 +39,8 @@ export const DailyPoint = z.object({
   value: z.number(),
   min: opt(z.number()),
   max: opt(z.number()),
+  /** Readings behind the value. */
+  count: z.number().int(),
 });
 
 export const ActivitySummary = z.object({

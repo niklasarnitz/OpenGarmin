@@ -1,7 +1,6 @@
 // What the dashboard measures. A concept is one quantity that Garmin and Apple Health may both record. Garmin's
 // own metric name comes first, then the HealthKit identifier, so the same series can come from either source.
-// The backend's metric names for HealthKit types are assumed to be the HealthKit identifiers (to confirm with the
-// server agent); see Web/README.md.
+// `scale` converts a key's stored unit to the concept's unit.
 
 export type ConceptId =
   | "steps"
@@ -13,11 +12,19 @@ export type ConceptId =
   | "bodyBattery"
   | "sleepMinutes"
   | "spo2"
-  | "respiration";
+  | "respiration"
+  | "distance"
+  | "floors"
+  | "exerciseMinutes"
+  | "weight"
+  | "bodyFat"
+  | "wristTemperature";
 
 export interface Concept {
   id: ConceptId;
   keys: readonly string[];
+  /** Factor per key from its stored unit to `unit`; 1 when absent. */
+  scale?: Readonly<Record<string, number>>;
   unit: string;
   agg: "sum" | "avg";
   decimals: number;
@@ -48,13 +55,51 @@ export const CONCEPTS: Record<ConceptId, Concept> = {
   stress: { id: "stress", keys: ["stress"], unit: "", agg: "avg", decimals: 0, higherIsBetter: false },
   bodyBattery: { id: "bodyBattery", keys: ["bodyBattery"], unit: "", agg: "avg", decimals: 0, higherIsBetter: true },
   sleepMinutes: { id: "sleepMinutes", keys: ["sleepMinutes"], unit: "min", agg: "sum", decimals: 0, higherIsBetter: true },
-  spo2: { id: "spo2", keys: ["spo2", "HKQuantityTypeIdentifierOxygenSaturation"], unit: "%", agg: "avg", decimals: 1, higherIsBetter: true },
+  // Both store a fraction (0.96).
+  spo2: {
+    id: "spo2",
+    keys: ["spo2", "HKQuantityTypeIdentifierOxygenSaturation"],
+    scale: { spo2: 100, HKQuantityTypeIdentifierOxygenSaturation: 100 },
+    unit: "%",
+    agg: "avg",
+    decimals: 1,
+    higherIsBetter: true,
+  },
   respiration: {
     id: "respiration",
     keys: ["respiration", "HKQuantityTypeIdentifierRespiratoryRate"],
     unit: "brpm",
     agg: "avg",
     decimals: 1,
+    higherIsBetter: null,
+  },
+  // Garmin stores metres, Apple Health the phone's preferred unit (km).
+  distance: {
+    id: "distance",
+    keys: ["distance", "HKQuantityTypeIdentifierDistanceWalkingRunning"],
+    scale: { distance: 0.001 },
+    unit: "km",
+    agg: "sum",
+    decimals: 1,
+    higherIsBetter: true,
+  },
+  floors: { id: "floors", keys: ["floors", "HKQuantityTypeIdentifierFlightsClimbed"], unit: "", agg: "sum", decimals: 0, higherIsBetter: true },
+  exerciseMinutes: {
+    id: "exerciseMinutes",
+    keys: ["HKQuantityTypeIdentifierAppleExerciseTime"],
+    unit: "min",
+    agg: "sum",
+    decimals: 0,
+    higherIsBetter: true,
+  },
+  weight: { id: "weight", keys: ["HKQuantityTypeIdentifierBodyMass"], unit: "kg", agg: "avg", decimals: 1, higherIsBetter: null },
+  bodyFat: { id: "bodyFat", keys: ["HKQuantityTypeIdentifierBodyFatPercentage"], unit: "%", agg: "avg", decimals: 1, higherIsBetter: false },
+  wristTemperature: {
+    id: "wristTemperature",
+    keys: ["HKQuantityTypeIdentifierAppleSleepingWristTemperature"],
+    unit: "°C",
+    agg: "avg",
+    decimals: 2,
     higherIsBetter: null,
   },
 };

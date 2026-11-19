@@ -56,18 +56,23 @@ final class InsightEngineTests: XCTestCase {
 
     // MARK: - Source resolution
 
-    func testGarminWinsOverHealthKitAndMirrorsAreIgnored() {
+    func testOneSourcePerDayGarminThenMirrorThenTheFullestAppleSource() {
         let rows: [InsightSources.Row] = [
             .init(day: 1, metric: "steps", source: "garmin", value: 8000, count: 1),
             .init(day: 1, metric: "HKQuantityTypeIdentifierStepCount", source: "healthkit:com.apple.health", value: 9000, count: 100),
             .init(day: 2, metric: "HKQuantityTypeIdentifierStepCount", source: "healthkit:com.apple.health", value: 9000, count: 100),
             .init(day: 2, metric: "HKQuantityTypeIdentifierStepCount", source: "healthkit:garmin-mirror", value: 7000, count: 50),
             .init(day: 3, metric: "steps", source: "healthkit:garmin-mirror", value: 7000, count: 50),
+            .init(day: 4, metric: "HKQuantityTypeIdentifierStepCount", source: "healthkit:com.apple.health.A", value: 2000, count: 10),
+            .init(day: 4, metric: "HKQuantityTypeIdentifierStepCount", source: "healthkit:com.apple.health.B", value: 9500, count: 400),
+            .init(day: 4, metric: "HKQuantityTypeIdentifierDistanceWalkingRunning", source: "healthkit:com.apple.health.B", value: 6.5, count: 400),
         ]
         let steps = InsightSources.resolve(rows)["steps"]
         XCTAssertEqual(steps?[1], 8000, "Garmin wins over Apple Health on the same day")
-        XCTAssertEqual(steps?[2], 9000, "the Apple Health alias lands under the Garmin name, and the mirror loses")
-        XCTAssertNil(steps?[3], "a day only the Garmin mirror covers is not used")
+        XCTAssertEqual(steps?[2], 7000, "the Garmin mirror wins over Apple Health; the two are never added")
+        XCTAssertEqual(steps?[3], 7000, "a day only the Garmin mirror covers is used")
+        XCTAssertEqual(steps?[4], 9500, "of two Apple devices the one with more readings wins, not their sum")
+        XCTAssertEqual(InsightSources.resolve(rows)["distance"]?[4], 6500, "Apple Health km become Garmin metres")
     }
 
     // MARK: - Engine

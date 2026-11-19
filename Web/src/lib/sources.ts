@@ -1,32 +1,46 @@
 import type { Series } from "./analytics";
 import type { Day } from "./time";
 
-/** Samples OpenGarmin wrote into HealthKit from Garmin data. They duplicate Garmin and are hidden by default. */
+/** What Garmin Connect or OpenGarmin wrote into Apple Health: a copy of Garmin data. */
 export const MIRROR_SOURCE = "healthkit:garmin-mirror";
+/** Every iPhone and Apple Watch, which the server lists one by one as `healthkit:com.apple.health.<device>`. */
+export const APPLE_SOURCE = "healthkit:apple";
 
 export interface SourcedValue {
   day: Day;
   source: string;
   value: number;
+  /** Readings behind the value; of two sources of the same rank on a day, the fuller one wins. */
+  count: number;
 }
+
+/** The source a value is shown and chosen under: all of Apple's own devices are one source. */
+export function sourceGroup(source: string): string {
+  return /^healthkit:com\.apple\.health/i.test(source) ? APPLE_SOURCE : source;
+}
+
+const rank = (group: string, preferred: string | undefined) =>
+  group === preferred ? 0 : group === "garmin" ? 1 : group === MIRROR_SOURCE ? 2 : group === APPLE_SOURCE ? 3 : 4;
 
 /**
- * One value per day from the best available source. The preferred source wins, then Garmin, then the others in
- * name order. A lower-ranked source fills the days the better one lacks, so a Garmin gap shows Apple Health.
+ * Exactly one value per day, never a sum of sources, because Garmin data also reaches Apple Health (through Garmin
+ * Connect and OpenGarmin) and an iPhone and an Apple Watch both count the same steps. The preferred source wins, then
+ * Garmin, then Garmin's copy in Apple Health, then Apple's devices, then other apps. Within one of these, the source
+ * with the most readings that day wins. A lower-ranked source fills the days the better ones lack.
  */
-export function resolveSeries(values: readonly SourcedValue[], preferred: string | undefined, includeMirror: boolean): Series {
-  const rank = (source: string) => (source === preferred ? 0 : source === "garmin" ? 1 : 2);
-  const out: Series = new Map();
-  values
-    .filter((v) => includeMirror || v.source !== MIRROR_SOURCE)
-    .sort((a, b) => rank(a.source) - rank(b.source) || a.source.localeCompare(b.source))
-    .forEach((v) => {
-      if (!out.has(v.day)) out.set(v.day, v.value);
-    });
-  return out;
+export function resolveSeries(values: readonly SourcedValue[], preferred: string | undefined): Series {
+  const best = new Map<Day, { rank: number; count: number; value: number }>();
+  for (const v of values) {
+    const r = rank(sourceGroup(v.source), preferred);
+    const current = best.get(v.day);
+    if (!current || r < current.rank || (r === current.rank && v.count > current.count)) {
+      best.set(v.day, { rank: r, count: v.count, value: v.value });
+    }
+  }
+  return new Map([...best].map(([day, b]) => [day, b.value]));
 }
 
-/** Every source that reports a value, mirror included, for the settings screen. */
+/** Every source group that reports a value, for the settings screen. */
 export function sourcesOf(values: readonly SourcedValue[]): string[] {
-  return [...new Set(values.map((v) => v.source))].sort((a, b) => a.localeCompare(b));
+  return [...new Set(values.map((v) => sourceGroup(v.source)))].sort((a, b) => a.localeCompare(b));
 }
