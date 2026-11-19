@@ -72,7 +72,7 @@ export function dayOfYear(day: Day): number {
   return daysBetween(`${yearOf(day)}-01-01` as Day, day);
 }
 
-export type Preset = "week" | "month" | "year" | "five" | "ten" | "all";
+export type Preset = "week" | "month" | "year" | "five" | "all";
 
 /** First day of a range that ends today. "All" starts at the earliest day the server holds. */
 export function presetStart(preset: Preset, today: Day, earliest?: Day): Day {
@@ -85,8 +85,6 @@ export function presetStart(preset: Preset, today: Day, earliest?: Day): Day {
       return addDays(today, -364);
     case "five":
       return addDays(today, -1826);
-    case "ten":
-      return addDays(today, -3652);
     case "all":
       return earliest ?? addDays(today, -364);
   }

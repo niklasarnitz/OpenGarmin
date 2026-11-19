@@ -25,8 +25,9 @@ const LOADED = [...new Set([...TILES, ...YEARS])];
 
 export function Overview() {
   const today = todayDay();
-  const { series, loading, error, retry } = useSeries(LOADED, addDays(today, -3660), today);
   const earliest = useEarliestDay();
+  // All time: from the first day the server holds any data.
+  const { series, loading, error, retry } = useSeries(LOADED, earliest ?? today, today);
   const hasAny = TILES.some((id) => series[id].size > 0);
 
   const hero = useMemo(() => {
@@ -104,7 +105,7 @@ function lastDays(s: Series, end: Day, n: number): (number | null)[] {
 }
 
 /**
- * The mean day of each calendar year with data, newest first, over the last ten years. Rows come from the data, so a
+ * The mean day of each calendar year with data, newest first, since the data begins. Rows come from the data, so a
  * new year or an older import adds a row by itself.
  */
 function YourYears({ series, current }: { series: Record<ConceptId, Series>; current: number }) {

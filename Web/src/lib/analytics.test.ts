@@ -196,12 +196,12 @@ describe("yearlyMeans", () => {
     ]);
   });
 
-  it("keeps at most `span` years up to the current year", () => {
+  it("keeps every year with data up to the current year", () => {
     const s: Series = new Map([
       [day("2016-12-31"), 1],
       [day("2017-01-01"), 2],
       [day("2027-01-01"), 3],
     ]);
-    expect(yearlyMeans({ s }, ["s"], 2026).map((r) => r.year)).toEqual([2017]);
+    expect(yearlyMeans({ s }, ["s"], 2026).map((r) => r.year)).toEqual([2017, 2016]);
   });
 });

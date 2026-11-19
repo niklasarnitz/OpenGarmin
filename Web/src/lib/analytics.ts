@@ -283,16 +283,16 @@ export interface YearRow<K extends string> {
 }
 
 /**
- * One row per calendar year with any data, newest first, from the earliest year with data (at most `span` years
- * back, counting `current`) to `current`. A value is the mean of that year's days that have one, so a year with half
+ * One row per calendar year with any data, newest first, from the earliest year with data to `current`.
+ * The first year may be partial; its mean still describes the days it has. A value is the mean of that year's days that have one, so a year with half
  * its days recorded is not half as large.
  */
-export function yearlyMeans<K extends string>(series: Record<K, Series>, keys: readonly K[], current: number, span = 10): YearRow<K>[] {
+export function yearlyMeans<K extends string>(series: Record<K, Series>, keys: readonly K[], current: number): YearRow<K>[] {
   const rows = new Map<number, Partial<Record<K, number>>>();
   for (const key of keys) {
     for (const bucket of aggregate(series[key], "year", "avg")) {
       const year = yearOf(bucket.start);
-      if (year > current || year <= current - span) continue;
+      if (year > current) continue;
       rows.set(year, { ...rows.get(year), [key]: bucket.value });
     }
   }

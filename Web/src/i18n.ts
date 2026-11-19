@@ -27,7 +27,6 @@ const en = {
   rangeMonth: "Month",
   rangeYear: "Year",
   rangeFive: "5 years",
-  rangeTen: "10 years",
   rangeAll: "All",
   gDay: "Day",
   gWeek: "Week",
@@ -52,7 +51,7 @@ const en = {
   ovYearsNote: "One square per day. Darker is more steps than that year's median.",
   ovSpark: "Last 120 days, 7-day average",
   ovYourYears: "Your years",
-  ovYourYearsNote: "The average day of each year with data, over the last ten years. Below each value: the change from the year before.",
+  ovYourYearsNote: "The average day of each year since your data begins. Below each value: the change from the year before.",
 
   xpTitle: "Metric",
   xpRange: "Range",
@@ -262,7 +261,6 @@ const de: Record<Key, string> = {
   rangeMonth: "Monat",
   rangeYear: "Jahr",
   rangeFive: "5 Jahre",
-  rangeTen: "10 Jahre",
   rangeAll: "Alles",
   gDay: "Tag",
   gWeek: "Woche",
@@ -287,7 +285,7 @@ const de: Record<Key, string> = {
   ovYearsNote: "Ein Quadrat pro Tag. Dunkler heißt mehr Schritte als der Jahresmedian.",
   ovSpark: "Letzte 120 Tage, 7-Tage-Mittel",
   ovYourYears: "Deine Jahre",
-  ovYourYearsNote: "Der durchschnittliche Tag jedes Jahres mit Daten, über die letzten zehn Jahre. Unter jedem Wert: die Veränderung zum Vorjahr.",
+  ovYourYearsNote: "Der durchschnittliche Tag jedes Jahres, seit deine Daten beginnen. Unter jedem Wert: die Veränderung zum Vorjahr.",
 
   xpTitle: "Messwert",
   xpRange: "Zeitraum",
